@@ -26,7 +26,9 @@ struct KeyboardWalk {
 // Encode a fraction of the full keyboard stick AFTER the GC deadzone and
 // octagonal clamp. Scaling raw 127 directly would lose low walking speeds.
 inline int KeyboardWalkAxis(int axis, bool diagonal, double scale) {
-  if(!axis) return 0;
+  // SDL -> PAD conversion can leave a neutral Y axis at -1. Never turn
+  // a value inside the native deadzone into a walking direction.
+  if(std::abs(axis)<=15) return 0;
   scale=std::isfinite(scale)?std::clamp(scale,0.0,1.0):1.0;
   if(scale>=1) return axis;
   if(scale<=0) return 0;

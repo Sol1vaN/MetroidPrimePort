@@ -1,6 +1,6 @@
 # Custom QoL reference build
 
-This branch preserves Sol1vaN's Windows-tested custom26 integration on upstream v0.22.0 (6440365dccc16f83d690e7ad67897d86be484ef5). It is a reference implementation for discussion, not a request to merge this entire branch. Focused contribution branches will be based on current upstream `port`.
+This branch preserves Sol1vaN's Windows-tested custom26 integration, with the custom27 Walk neutral-input correction, on upstream v0.22.0 (6440365dccc16f83d690e7ad67897d86be484ef5). It is a reference implementation for discussion, not a request to merge this entire branch. Focused contribution branches will be based on current upstream `port`.
 
 These changes were developed with Codex assistance and iterated through user playtesting. They still need maintainer review and broader platform testing.
 
@@ -25,6 +25,8 @@ The wheel bindings and some HUD, crosshair, Morph Ball and movement fixes overla
 The local Windows x86_64 RelWithDebInfo custom26 build completed. Its integration run passed 73 of 74 tests; the remaining `port_ws_tests` failure was a local TLS test connection to 127.0.0.2, and that test and networking code were unchanged from upstream. This is not a claim of a clean cross-platform CI run.
 
 A diagnostic run loaded a copy of a real save and completed 3,600 frames with a normal exit. It used dummy audio, so that run did not validate sound audibly. User feedback and local playtesting informed the map audio and motion tuning; Linux, Android and macOS validation remains outstanding.
+
+The custom27 follow-up fixes a Walk/Run integration regression: the input engine's neutral Y conversion can produce -1 before PADClamp. The Walk encoder now discards the native deadzone before expanding a direction and excludes neutral axes from diagonal detection. A regression test failed before the fix and passes after it; all four targeted input/movement tests pass. An instrumented real-save run reproduced backward motion without a direction before the fix. The corrected run completed 3,900 frames and measured zero movement while Walk alone was held, while forward Walk remained functional. Instrumentation is not included in the published source. Further user playtesting of the corrected build remains pending.
 
 ## Building
 

@@ -119,6 +119,15 @@ int main() {
     for(int i=0;i<400;++i)bounded.Update(true,false,true,walk,run,.01);
     Check(std::abs(bounded.value-(run==0?.7:1.))<1e-6,"run limits 70 to 100");
   }
+  // The engine's SDL -> PAD Y conversion can encode neutral as -1 before
+  // PADClamp. Walk must not magnify anything the native deadzone would discard.
+  for(int raw=-15;raw<=15;++raw) for(double scale:{.25,.5,.7,.999,1.}) {
+    PADStatus native[4]{},walk[4]{};
+    native[0].stickY=raw;
+    walk[0].stickY=KeyboardWalkAxis(raw,false,scale);
+    PADClamp(native);PADClamp(walk);
+    Check(native[0].stickY==0 && walk[0].stickY==0,"neutral PAD values stay neutral with Walk");
+  }
   Check(KeyboardWalkAxis(0,false,.5)==0,"no drift without movement key");
   Check(KeyboardWalkAxis(127,false,0)==0,"zero scale is stationary");
   Check(KeyboardWalkAxis(127,false,std::numeric_limits<double>::quiet_NaN())==127,"invalid scale safe");

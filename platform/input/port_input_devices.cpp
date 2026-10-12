@@ -1102,7 +1102,8 @@ SPoll Poll(unsigned mouseHeld, bool focused) {
   PortInput::Output keyboard = out, other = out;
   keyboard.value = out.keyboardValue; other.value = out.otherValue;
   PADStatus keys = Synthesize(keyboard), pad = Synthesize(other);
-  const bool diagonal = keys.stickX != 0 && keys.stickY != 0;
+  // Test the native deadzone, not raw nonzero: neutral Y may be -1.
+  const bool diagonal = std::abs(keys.stickX) > 15 && std::abs(keys.stickY) > 15;
   keys.stickX = aurora::input::KeyboardWalkAxis(keys.stickX, diagonal, scale);
   keys.stickY = aurora::input::KeyboardWalkAxis(keys.stickY, diagonal, scale);
   r.status = Synthesize(out);

@@ -4,13 +4,15 @@ This branch preserves Sol1vaN's Windows-tested custom26 integration, with the cu
 
 These changes were developed with Codex assistance and iterated through user playtesting. They still need maintainer review and broader platform testing.
 
+[See the annotated screenshot gallery](CUSTOM_QOL_SCREENSHOTS.md) for the two map layouts, input settings, Walk binding and viewmodel controls, alongside the PrimeHack reference.
+
 ## Candidate contributions
 
 - High-DPI mouse sensitivity: a logarithmic range down to 0.000001 rad/px, six displayed decimals and no slider rounding to the display format.
 - Frame-limit hotkey remapping, including clearing its binding.
 - Continuous screen brightness applied to the rendered image, with smoother native-menu adjustment.
 - Optional Stick Sway and Inertia Sway, with separate strength controls, rear-arm pivoting and procedural pointing; None is the default.
-- Viewmodel Position with automatic/manual positioning and a reset to the original presentation.
+- Viewmodel Position, referenced from PrimeHack's adjustment concept, with automatic/manual positioning and a reset to the original presentation.
 - Keyboard Walk/Run with Always run, configurable speeds and gradual transitions, including horizontal movement during jumps and drops.
 - Movement-speed-driven bobbing and footstep timing across simulation rates.
 - Aspect-correct electrical visor damage effects.

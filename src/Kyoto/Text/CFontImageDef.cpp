@@ -29,5 +29,8 @@ bool CFontImageDef::IsLoaded() const {
 }
 
 int CFontImageDef::CalculateBaseline() const {
+#ifdef TARGET_PC
+  if(mPortBaseline>=0)return mPortBaseline;
+#endif
   return (2.5f * GetHeight()) / 3.f;
 }

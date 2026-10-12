@@ -27,6 +27,9 @@ public:
   int MAF_Decrement(CGuiFunctionDef* func, CGuiControllerInfo* info);
   int MAF_Increment(CGuiFunctionDef* func, CGuiControllerInfo* info);
   void SetIncrement(float increment);
+#ifdef TARGET_PC
+  void SetContinuous(bool enabled) { mContinuous = enabled; }
+#endif
   void SetMinVal(float min);
   void SetMaxVal(float max);
   void SetCurVal(float cur);
@@ -43,6 +46,9 @@ private:
   TFunctor2< CGuiSliderGroup* const, const float > xd8_changeCallback;
   EState xf0_state;
   bool xf4_24_inputPending : 1;
+#ifdef TARGET_PC
+  bool mContinuous = false;
+#endif
 };
 
 CHECK_SIZEOF(CGuiSliderGroup, 0xf8)

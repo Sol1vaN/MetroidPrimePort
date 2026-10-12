@@ -289,6 +289,7 @@ def make_icon(name, width=SIZE, height=SIZE):
 
 
 def main():
+    from make_menu_prompt import generate
     keys = read_prompt_keys()
     for device, icons in DEVICE_ICONS.items():
         d = os.path.join(OUT, device)
@@ -331,6 +332,7 @@ def main():
             suffix = "" if (w, h) == (SIZE, SIZE) else f"_{w}x{h}"
             write_dds(make_icon(stem + ".png", w, h),
                       os.path.join(bindings, f"{stem}{suffix}.dds"))
+    generate(ROOT, OUT)
     print(f"bindings: {len(BINDING_ICONS) - len(missing)} key icons, {padCount} pad icons -> {bindings}")
     if missing:
         print("  missing from tools/prompt_icons: " + ", ".join(missing))

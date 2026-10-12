@@ -1,6 +1,10 @@
 #ifndef _CMORPHBALL
 #define _CMORPHBALL
 
+#ifdef TARGET_PC
+#include "port_ball_presentation.h"
+#endif
+
 #include "Kyoto/Audio/CSfxHandle.hpp"
 #include "Kyoto/CRandom16.hpp"
 #include "Kyoto/Math/CQuaternion.hpp"
@@ -77,6 +81,11 @@ public:
   void UpdateEffects(float dt, CStateManager& mgr);
   void SetBallLightActive(CStateManager& mgr, const bool active);
   CTransform4f GetBallToWorld() const;
+  CTransform4f GetBallRenderTransform() const;
+#ifdef TARGET_PC
+  void PortSnapshotRenderTransform();
+  bool PortPresentedView(const CTransform4f& view, CTransform4f& out) const;
+#endif
   float GetBallRadius() const;
   void TakeDamage(float damage);
   bool IsProjectile() const { return x1954_isProjectile; }
@@ -383,6 +392,9 @@ private:
   float x1e48_damageEffectDecaySpeed;
   float x1e4c_damageTime;
   rstl::single_ptr< CMorphBallShadow > x1e50_shadow;
+#ifdef TARGET_PC
+  PortBallPresentation::History xPortRenderHistory;
+#endif
 };
 CHECK_SIZEOF(CMorphBall, 0x1e58);
 

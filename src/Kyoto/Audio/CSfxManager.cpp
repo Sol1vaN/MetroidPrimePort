@@ -1,3 +1,4 @@
+#include "musyx/port_voices.h"
 #include "Kyoto/Alloc/CMemory.hpp"
 #include "Kyoto/Audio/CAudioSys.hpp"
 #include "Kyoto/Audio/CSfxHandle.hpp"
@@ -627,6 +628,23 @@ void CSfxManager::Update(float dt) {
     mTranslationTableTok = nullptr;
   }
 }
+void CSfxManager::StepTravel(CSfxHandle handle,float teeth,float dt) {
+  // The native macro latches its initial velocity. Start at normal volume;
+  // prevent the mixer from running until the detent gate has been attached.
+  MusyxPortBeginVoiceUpdate();
+  struct MixerUnlock { ~MixerUnlock() { MusyxPortEndVoiceUpdate(); } } unlock;
+
+  auto& channel=mChannels[mCurrentChannel];
+  if(handle.GetIndex()<0 || handle.GetIndex()>=channel.x48_.size())return;
+  CBaseSfxWrapper* wrapper=channel.x48_[handle.GetIndex()];
+  if(!wrapper || handle!=wrapper->GetSfxHandle())return;
+  if(!wrapper->IsPlaying())Update(0.f);
+  // Update may retire a stopped wrapper; resolve the handle again.
+  wrapper=channel.x48_[handle.GetIndex()];
+  if(wrapper && handle==wrapper->GetSfxHandle() && wrapper->IsPlaying())
+    MusyxPortSetVoiceStepTravel(wrapper->GetVoice(),teeth,dt);
+}
+
 void CSfxManager::PitchBend(CSfxHandle handle, int pitch) {
   CBaseSfxWrapper* wrapper = mChannels[mCurrentChannel].x48_[handle.GetIndex()];
   if (wrapper == nullptr || handle != wrapper->GetSfxHandle()) {

@@ -1,4 +1,6 @@
 #pragma once
+#include <vector>
+#include <cstdint>
 
 // Binding-aware button prompt icons.
 //
@@ -24,6 +26,8 @@ void Initialize(const char* textureRoot);
 
 // Re-registers an action's icon when its binding changed. Call once per frame.
 void Poll();
+// Existing binding glyph DDS, for native inline map prompts.
+bool ReadKeyGlyph(int scancode, std::vector<uint8_t>& bytes);
 
 // Tells the prompts that the touch overlay was just used, and in which layout
 // (true for the twin-stick Xbox arrangement, false for the GameCube one), so the

@@ -2302,7 +2302,7 @@ void CMorphBall::PreRender(CStateManager& mgr, const CFrustumPlanes&) {
   }
 }
 
-void CMorphBall::Render(const CStateManager& mgr, const CActorLights* lights) const {
+CTransform4f CMorphBall::GetBallRenderTransform() const {
   CTransform4f ballToWorld = GetBallToWorld();
   if (x28_tireMode) {
     const CVector3f lookDir = x0_player.x500_lookDir;
@@ -2311,6 +2311,43 @@ void CMorphBall::Render(const CStateManager& mgr, const CActorLights* lights) co
     ballToWorld = ballToWorld * tilt.BuildTransform4f();
   }
 
+  return ballToWorld;
+}
+
+#ifdef TARGET_PC
+namespace {
+PortBallPresentation::Pose BallRenderPose(CTransform4f transform) {
+  transform.Orthonormalize();
+  const CQuaternion rotation = CQuaternion::FromMatrix(transform);
+  const CVector3f position = transform.GetTranslation();
+  return {position.GetX(), position.GetY(), position.GetZ(),
+          {rotation.GetScalar(), rotation.AxisX(), rotation.AxisY(), rotation.AxisZ()}};
+}
+CTransform4f BallPoseTransform(const PortBallPresentation::Pose& pose) {
+  const auto& q = pose.rotation;
+  return CQuaternion(q.w, q.x, q.y, q.z).BuildTransform4f(CVector3f(pose.x, pose.y, pose.z));
+}
+}
+void CMorphBall::PortSnapshotRenderTransform() {
+  xPortRenderHistory.Snapshot(BallRenderPose(GetBallRenderTransform()), CActor::PortTickGeneration(),
+                             x0_player.GetMorphballTransitionState() == CPlayer::kMS_Morphed);
+}
+bool CMorphBall::PortPresentedView(const CTransform4f& view, CTransform4f& out) const {
+  const auto current = BallRenderPose(GetBallRenderTransform());
+  PortBallPresentation::Pose blended;
+  if (!xPortRenderHistory.Present(current, CActor::PortTickGeneration(),
+                                 x0_player.GetMorphballTransitionState() == CPlayer::kMS_Morphed,
+                                 CCameraManager::GetPresentationInterpolation(), blended))
+    return false;
+  // Compensate around the actual render center, including tire tilt. This is
+  // presentation only: collision, rolling physics and camera targets stay native.
+  out = BallPoseTransform(current) * BallPoseTransform(blended).GetQuickInverse() * view;
+  return true;
+}
+#endif
+
+void CMorphBall::Render(const CStateManager& mgr, const CActorLights* lights) const {
+  const CTransform4f ballToWorld = GetBallRenderTransform();
   const bool dying = x0_player.x9f4_deathTime > 0.f;
   if (x0_player.x9f4_deathTime > 0.f) {
     float deathFade = 1.f - x0_player.x9f4_deathTime / (0.2f * gkBallDeathTime);

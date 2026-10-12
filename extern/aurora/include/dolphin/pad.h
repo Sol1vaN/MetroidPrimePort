@@ -138,6 +138,11 @@ void PADSetAnalogMode(u32 mode);
 #define PAD_KEY_MOUSE_RIGHT (-4)
 #define PAD_KEY_MOUSE_X1 (-5)
 #define PAD_KEY_MOUSE_X2 (-6)
+#define PAD_KEY_MOUSE_WHEEL_UP (-7)
+#define PAD_KEY_MOUSE_WHEEL_DOWN (-8)
+// Wheel pulses last one PADRead, independent of rendering frequency.
+void PADClearMouseWheel();
+s32 PADGetMouseWheelDirection();
 typedef u16 PADButton;
 typedef u32 PADExtButton;
 typedef u16 PADAxis;
@@ -210,6 +215,11 @@ BOOL PADSetKeyAxisBindingSlot(u32 port, u32 slot, PADKeyAxisBinding binding);
 PADKeyAxisBinding* PADGetKeyAxisBindingsSlot(u32 port, u32 slot, u32* axisCount);
 void PADClearKeyBindings(u32 port);
 void PADSetKeyboardActive(u32 port, BOOL active);
+/* Scale only keyboard/mouse left-stick bindings, before physical pad merging. */
+void PADSetKeyboardStickScale(u32 port, f32 scale);
+/* Scale for a currently keyboard-owned movement vector, otherwise 1. */
+f32 PADGetKeyboardWalkScale(u32 port);
+void PADSetKeyboardOverride(u32 port, s32 x, s32 y, f32 scale);
 
 PADDeadZones* PADGetDeadZones(u32 port);
 const char* PADGetButtonName(PADButton);

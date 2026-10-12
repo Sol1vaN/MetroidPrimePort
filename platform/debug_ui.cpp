@@ -5,6 +5,9 @@
 #include "port_env.h"
 #include "port_collision_view.h"
 #include "port_debug.h"
+#include "port_display_controls.h"
+#include "port_hotkeys.h"
+#include "port_viewmodel_settings.h"
 #include "port_freecam.h"
 #include "port_hd_font.h"
 #include "port_room_env.h"
@@ -18,6 +21,9 @@
 #include "port_controls.h"
 #include "port_input_devices.h"
 #include "port_input_remap_ui.h"
+#include "port_map_controls.h"
+#include "MetroidPrime/Player/CPlayer.hpp"
+#include "../extern/aurora/lib/keyboard_walk.hpp"
 #include "port_data_folder.h"
 #include "port_gci.h"
 #include "port_mods.h"
@@ -149,6 +155,19 @@ int sFpsCap = 0; // with the 60 FPS cap off; 0 = unlimited
 constexpr int kFpsCapMin = 30;
 constexpr int kFpsCapMax = 500;
 int ClampFpsCap(int fps) { return fps <= 0 ? 0 : std::clamp(fps, kFpsCapMin, kFpsCapMax); }
+PortHotkeys::Bindings sPortHotkeys;
+int& sFrameLimitKey = sPortHotkeys.keys[PortHotkeys::FrameLimit];
+Uint64 sPortHotkeyCaptureStart = 0;
+float sScreenBrightness = 50.f;
+int sWeaponSway = -1;
+float sStickSwayStrength = 100.f;
+float sInertiaSwayStrength = 100.f;
+bool sInertiaStrengthLoaded = false;
+int sInertiaCalibration = 1;
+bool sWalkEnabled = true, sAlwaysRun = true;
+float sWalkSpeed = 50.f, sRunSpeed = 100.f;
+int sWalkBindings[2] = {-1, -1};
+PortViewmodelSettings::Settings sViewmodel;
 bool sTurbo = false;
 unsigned sTurboTicks = 1;
 bool sTraceTiming = false;
@@ -321,6 +340,7 @@ bool sMouseGameplayActive = false;
 // copy, like Remastered.
 std::string sGameOptions;
 bool sGameOptionsRestored = false;
+bool sInvertMapAxis = false;
 PortMouse::AimState sMouseAimState;
 PortMouse::ButtonGate sMouseButtonGate;
 PortMouse::ButtonGate sMouseMenuGate;
@@ -369,7 +389,7 @@ bool sAiAudioEnabled = true;
 bool sMusyxAudioEnabled = true;
 bool sResetRequested = false;
 std::atomic< bool > sToggleRequested{false};
-// F5 = 1 (save), F9 = 2 (load), from the event watch; handled on the game thread.
+// Remappable save = 1 / load = 2 requests, handled on the game thread.
 std::atomic< int > sSaveStateHotkey{0};
 // F11 asks for a fullscreen toggle; DrawUI applies it on the main thread.
 std::atomic< bool > sFullscreenHotkey{false};
@@ -493,6 +513,52 @@ void ApplySetting(const std::string& key, const std::string& value) {
     sFrameLimitEnabled = ParseBool(value);
   } else if (key == "fps_cap") {
     sFpsCap = ClampFpsCap(std::atoi(value.c_str()));
+  } else if (key == "frame_limit_key" || key == "save_state_key" || key == "load_state_key") {
+    const auto action = key == "frame_limit_key" ? PortHotkeys::FrameLimit :
+        key == "save_state_key" ? PortHotkeys::SaveState : PortHotkeys::LoadState;
+    sPortHotkeys.Assign(action, std::atoi(value.c_str()));
+  } else if (key == "weapon_sway") {
+    const int mode = std::atoi(value.c_str());
+    if (mode >= -1 && mode <= 1) sWeaponSway = mode;
+  } else if (key == "stick_sway_strength" || key == "inertia_sway_strength") {
+    const float v = static_cast<float>(std::atof(value.c_str()));
+    if (std::isfinite(v)) {
+      float& strength = key == "stick_sway_strength" ? sStickSwayStrength : sInertiaSwayStrength;
+      strength = std::clamp(v, 0.f, 200.f);
+      if (key == "inertia_sway_strength") sInertiaStrengthLoaded = true;
+    }
+  } else if (key == "inertia_sway_calibration") {
+    sInertiaCalibration = std::atoi(value.c_str());
+  } else if (key == "walk_enabled") {
+    sWalkEnabled = ParseBool(value);
+  } else if (key == "always_run") {
+    sAlwaysRun = ParseBool(value);
+  } else if (key == "walk_speed" || key == "run_speed") {
+    const float v = static_cast<float>(std::atof(value.c_str()));
+    if (std::isfinite(v)) {
+      if (key == "walk_speed") sWalkSpeed = std::clamp(v,25.f,50.f);
+      else sRunSpeed = std::clamp(v,70.f,100.f);
+    }
+  } else if (key == "walk_key" || key == "walk_key_alt") {
+    char* end=nullptr; const long code=std::strtol(value.c_str(),&end,10);
+    if(end!=value.c_str() && *end=='\0' && code>=PAD_KEY_MOUSE_WHEEL_DOWN && code<SDL_SCANCODE_COUNT)
+      sWalkBindings[key=="walk_key"?0:1]=int(code);
+  } else if (key == "viewmodel_enabled") {
+    sViewmodel.enabled = ParseBool(value);
+  } else if (key == "viewmodel_automatic") {
+    sViewmodel.automatic = ParseBool(value);
+  } else if (key == "viewmodel_fov" || key == "viewmodel_right" ||
+             key == "viewmodel_forward" || key == "viewmodel_up") {
+    const float v = static_cast<float>(std::atof(value.c_str()));
+    if (std::isfinite(v)) {
+      if (key == "viewmodel_fov") sViewmodel.fov = std::clamp(v, 35.f, 110.f);
+      else if (key == "viewmodel_right") sViewmodel.right = std::clamp(v, -50.f, 50.f);
+      else if (key == "viewmodel_forward") sViewmodel.forward = std::clamp(v, -50.f, 50.f);
+      else sViewmodel.up = std::clamp(v, -50.f, 50.f);
+    }
+  } else if (key == "screen_brightness") {
+    const float p = static_cast<float>(std::atof(value.c_str()));
+    if (std::isfinite(p) && p >= 0.f && p <= 100.f) sScreenBrightness = p;
   } else if (key == "vsync") {
     sVsyncEnabled = ParseBool(value);
   } else if (key == "fullscreen") {
@@ -639,6 +705,10 @@ void ApplySetting(const std::string& key, const std::string& value) {
     }
   } else if (key == "game_options") {
     sGameOptions = value;
+  } else if (key == "invert_map_axis") {
+    sInvertMapAxis = ParseBool(value);
+  } else if (key == "map_zoom_sensitivity") {
+    PortMapControls::SetZoomSensitivity(static_cast<float>(std::atof(value.c_str())));
   } else if (key == "speedrun_timer") {
     sSpeedrunTimer = ParseBool(value);
   } else if (key == "livesplit") {
@@ -818,6 +888,26 @@ std::string SettingsText() {
   file << "dynamic_res_min=" << sDynamicResMin << '\n';
   file << "frame_limit=" << (sFrameLimitEnabled ? 1 : 0) << '\n';
   file << "fps_cap=" << sFpsCap << '\n';
+  file << "frame_limit_key=" << sFrameLimitKey << '\n';
+  file << "save_state_key=" << sPortHotkeys.keys[PortHotkeys::SaveState] << '\n';
+  file << "load_state_key=" << sPortHotkeys.keys[PortHotkeys::LoadState] << '\n';
+  file << "screen_brightness=" << sScreenBrightness << '\n';
+  file << "weapon_sway=" << sWeaponSway << '\n';
+  file << "stick_sway_strength=" << sStickSwayStrength << '\n';
+  file << "inertia_sway_strength=" << sInertiaSwayStrength << '\n';
+  file << "inertia_sway_calibration=2\n";
+  file << "walk_enabled=" << sWalkEnabled << '\n';
+  file << "always_run=" << sAlwaysRun << '\n';
+  file << "walk_speed=" << sWalkSpeed << '\n';
+  file << "run_speed=" << sRunSpeed << '\n';
+  file << "walk_key=" << sWalkBindings[0] << '\n';
+  file << "walk_key_alt=" << sWalkBindings[1] << '\n';
+  file << "viewmodel_enabled=" << (sViewmodel.enabled ? 1 : 0) << '\n';
+  file << "viewmodel_automatic=" << (sViewmodel.automatic ? 1 : 0) << '\n';
+  file << "viewmodel_fov=" << sViewmodel.fov << '\n';
+  file << "viewmodel_right=" << sViewmodel.right << '\n';
+  file << "viewmodel_forward=" << sViewmodel.forward << '\n';
+  file << "viewmodel_up=" << sViewmodel.up << '\n';
   file << "sim_rate=" << sSimRate << '\n';
   file << "sim_adaptive=" << (sSimAdaptive ? 1 : 0) << '\n';
   file << "smooth_frames=" << (sSmoothFrames ? 1 : 0) << '\n';
@@ -838,6 +928,8 @@ std::string SettingsText() {
   if (!sGameOptions.empty()) {
     file << "game_options=" << sGameOptions << '\n';
   }
+  file << "invert_map_axis=" << (sInvertMapAxis ? 1 : 0) << '\n';
+  file << "map_zoom_sensitivity=" << PortMapControls::ZoomSensitivity() << '\n';
   if (!sDiscPath.empty()) {
     file << "disc_path=" << sDiscPath << '\n';
   }
@@ -999,6 +1091,8 @@ void EnsureInitialized() {
   }
   sInitialized = true;
   LoadSettings();
+  if (sInertiaStrengthLoaded && sInertiaCalibration < 2) sInertiaSwayStrength /= 1.3f;
+  sInertiaCalibration = 2;
 
   // Environment variables are explicit per-run overrides and win over the file.
   if (port::EnvFlag("MP_TRACE_TIMING")) {
@@ -1183,6 +1277,32 @@ static int EffectiveAnisotropy() { return sOriginalExperience ? 1 : sAnisotropy;
 static void ApplyGraphicsQuality() {
   aurora_set_graphics_quality(static_cast< uint32_t >(EffectiveMsaa()),
                               static_cast< uint16_t >(EffectiveAnisotropy()));
+}
+
+int WeaponSway() { EnsureInitialized(); return sWeaponSway; }
+float WeaponSwayStrength() {
+  EnsureInitialized();
+  return (sWeaponSway == 0 ? sStickSwayStrength : sInertiaSwayStrength) * .01f;
+}
+bool ViewmodelEnabled() { EnsureInitialized(); return sViewmodel.enabled; }
+float ViewmodelFov() { EnsureInitialized(); return sViewmodel.Fov(sFirstPersonFov); }
+bool ViewmodelPosition(float& right, float& forward, float& up) {
+  EnsureInitialized();
+  const auto p = sViewmodel.GetPosition(sFirstPersonFov);
+  right = p.x; forward = p.y; up = p.z;
+  return sViewmodel.enabled;
+}
+float ScreenBrightness() { EnsureInitialized(); return sScreenBrightness; }
+void SetScreenBrightness(float percent) {
+  EnsureInitialized();
+  if (std::isfinite(percent)) {
+    sScreenBrightness = std::clamp(percent, 0.f, 100.f);
+    MarkDirty();
+  }
+}
+int LegacyPortHotkey(int action) {
+  EnsureInitialized();
+  return action >= 0 && action < PortHotkeys::Count ? sPortHotkeys.keys[action] : -1;
 }
 
 bool FrameLimitEnabled() {
@@ -2333,6 +2453,7 @@ void SetMouseCaptured(bool captured) {
   // Anything still physically held is ignored by the gate anyway.
   if (captured != sMouseCaptured) sMouseHeldButtons.Clear();
   sMouseCaptured = captured;
+  if (!captured) PortMapControls::ResetInput();
   if (!captured) {
     sMouseButtonGate.Reset();
     sMousePendingX = sMousePendingY = sMouseFrameX = sMouseFrameY = 0.f;
@@ -2350,6 +2471,22 @@ bool MouseInvertY() { EnsureInitialized(); return sInput.mouseInvertY; }
 bool MouseButtons() { EnsureInitialized(); return sInput.mouseButtons; }
 bool MouseCrosshair() { EnsureInitialized(); return sInput.mouseCrosshair; }
 int CrosshairSize() { EnsureInitialized(); return sInput.crosshairSize; }
+bool InvertMapAxis() { EnsureInitialized(); return sInvertMapAxis; }
+bool AlwaysRun() { EnsureInitialized(); return sAlwaysRun; }
+int WalkBinding(int slot) { EnsureInitialized(); return slot>=0 && slot<2?sWalkBindings[slot]:-1; }
+void SetWalkBinding(int slot,int code) {
+  EnsureInitialized(); if(slot>=0 && slot<2) { sWalkBindings[slot]=code; MarkDirty(); }
+}
+float KeyboardWalkScale(float dt) {
+  EnsureInitialized();
+  static aurora::input::KeyboardWalk ramp;
+  const CPlayer* player = sStateManager ? sStateManager->GetPlayer() : nullptr;
+  const bool active = sWalkEnabled && !Visible() && SDL_GetKeyboardFocus()!=nullptr && player &&
+      sStateManager->GetGameState()==CStateManager::kGS_Running && !player->GetDisableInput() &&
+      player->GetCameraState()==CPlayer::kCS_FirstPerson &&
+      player->GetMorphballTransitionState()==CPlayer::kMS_Unmorphed;
+  return float(ramp.Update(active,sAlwaysRun,PortInputDevices::WalkHeld(),sWalkSpeed*.01,sRunSpeed*.01,dt));
+}
 void SetCrosshairSize(int percent) {
   EnsureInitialized();
   sInput.crosshairSize = std::clamp(percent, kCrosshairSizeMin, kCrosshairSizeMax);
@@ -2396,6 +2533,7 @@ void AddMouseDelta(float dx, float dy) {
   if (!sMouseCaptured || !MouseAim() || Visible() || !std::isfinite(dx) || !std::isfinite(dy)) {
     return;
   }
+  if (MapScreenOpen()) { PortMapControls::AddMotion(dx, dy); return; }
   sMousePendingX += dx;
   sMousePendingY += dy;
 }
@@ -2635,6 +2773,7 @@ void RequestMapTap() {
 // Game thread, once per frame from CAutoMapper::Update.
 void SetMapScreenOpen(bool open) {
   std::lock_guard lock(sMapPanMutex);
+  if (!open || open != sMapScreenOpen) PortMapControls::ResetInput();
   sMapScreenOpen = open;
   sMapScreenStamp = std::chrono::steady_clock::now();
 }
@@ -4956,7 +5095,7 @@ std::string HotkeyHint() {
   std::string hint;
   const std::string menu = PortInputRemap::BindingsText(PortInput::Action::PortMenu, " / ");
   if (!menu.empty()) hint += menu + ": hide   ";
-  hint += "F10: frame limit";
+  hint += PortInputRemap::BindingsText(PortInput::Action::FrameLimit, " / ") + ": frame limit";
   const std::string shot = PortInputRemap::BindingsText(PortInput::Action::Screenshot, " / ");
   if (!shot.empty()) hint += "   " + shot + ": screenshot";
   return hint;
@@ -5713,6 +5852,12 @@ void DrawVideoDisplay() {
                         "Costs a second world render while the scan visor is up.\n"
                         "Off: the original magnified copy of the screen.");
 
+  float brightness = ScreenBrightness();
+  if (ImGui::SliderFloat("Screen brightness", &brightness, 0.f, 100.f, "%.1f%%", ImGuiSliderFlags_NoRoundToFormat)) {
+    SetScreenBrightness(brightness);
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Neutral##brightness")) SetScreenBrightness(50.f);
   ImGui::SeparatorText("HUD and view");
   bool hudWide = sHudWide;
   if (ImGui::Checkbox("Widescreen HUD (spread to edges)", &hudWide)) {
@@ -5779,6 +5924,43 @@ void DrawVideoDisplay() {
     ImGui::SetItemTooltip("First-person vertical FOV (retail 55). The arm cannon stays at the retail\n"
                           "FOV; morph ball and cutscene cameras are unchanged.");
   }
+  ImGui::Dummy(ImVec2(0.f, ImGui::GetFontSize() * 0.65f));
+  int swaySelection = sWeaponSway + 1;
+  if (ImGui::Combo("Weapon sway", &swaySelection, "None\0Stick Sway\0Inertia Sway\0")) {
+    sWeaponSway = swaySelection - 1;
+    MarkDirty();
+  }
+  ImGui::SetItemTooltip("None: use only the original weapon animations.\n"
+                        "Stick Sway: the arm cannon follows mouse movement, simulating lock-on mode with a joystick stick.\n"
+                        "Inertia Sway: a soft lag and weighted return after turns and flicks.\n"
+                        "Preserves native animations, HUD and projectile aim.");
+  ImGui::Spacing();
+  if (sWeaponSway >= 0) {
+    float& strength = sWeaponSway == 0 ? sStickSwayStrength : sInertiaSwayStrength;
+    if (ImGui::SliderFloat("Sway strength", &strength, 0.f, 200.f, "%.1f%%", ImGuiSliderFlags_NoRoundToFormat)) MarkDirty();
+    ImGui::SetItemTooltip("Reaction strength for the selected style. Each style remembers its own value.\n"
+                          "0%: no added sway. 100%: default. 200%: double strength.\n"
+                          "Preserves smoothing, rear pivot, native animations and centered aim.");
+    ImGui::Spacing();
+  }
+  ImGui::SeparatorText("Viewmodel Position");
+  if (ImGui::Checkbox("Enable viewmodel adjustment", &sViewmodel.enabled)) MarkDirty();
+  ImGui::SameLine();
+  if (ImGui::Button("Reset##viewmodel")) { sViewmodel = {}; MarkDirty(); }
+  ImGui::SetItemTooltip("Restore the original arm position and perspective. Camera FOV and weapon sway are unchanged.");
+  ImGui::BeginDisabled(!sViewmodel.enabled);
+  if (ImGui::RadioButton("Automatic", sViewmodel.automatic)) { sViewmodel.automatic = true; MarkDirty(); }
+  ImGui::SameLine();
+  if (ImGui::RadioButton("Manual", !sViewmodel.automatic)) { sViewmodel.automatic = false; MarkDirty(); }
+  if (sViewmodel.automatic) {
+    ImGui::TextDisabled("Follows camera FOV with automatic arm positioning.");
+  } else {
+    if (ImGui::SliderFloat("Viewmodel FOV", &sViewmodel.fov, 35.f, 110.f, "%.1f deg")) MarkDirty();
+    if (ImGui::SliderFloat("Left/Right", &sViewmodel.right, -50.f, 50.f, "%.1f", ImGuiSliderFlags_NoRoundToFormat)) MarkDirty();
+    if (ImGui::SliderFloat("Forwards/Backwards", &sViewmodel.forward, -50.f, 50.f, "%.1f", ImGuiSliderFlags_NoRoundToFormat)) MarkDirty();
+    if (ImGui::SliderFloat("Up/Down", &sViewmodel.up, -50.f, 50.f, "%.1f", ImGuiSliderFlags_NoRoundToFormat)) MarkDirty();
+  }
+  ImGui::EndDisabled();
   EndOriginalLocked(locked);
 
 }
@@ -6205,6 +6387,8 @@ void DrawControlsOptions() {
 }
 
 void DrawControlsKeyboardMouse() {
+  ImGui::TextDisabled("Bindings and port hotkeys: Controls > Remap.");
+
   ImGui::SeparatorText("Mouse aim");
   bool mouseAim = sInput.mouseAim;
   if (ImGui::Checkbox("Mouse aim", &mouseAim)) {
@@ -6216,10 +6400,16 @@ void DrawControlsKeyboardMouse() {
     MarkDirty();
   }
   ImGui::TextDisabled("Also switches on Twin stick, so a controller's right stick aims too.");
-  if (ImGui::SliderFloat("Sensitivity", &sInput.mouseSensitivity, 0.0005f, 0.02f, "%.4f rad/px",
-                         ImGuiSliderFlags_Logarithmic)) {
+  if (ImGui::SliderFloat("Sensitivity", &sInput.mouseSensitivity, PortDisplayControls::kSensitivityMin, PortDisplayControls::kSensitivityMax, "%.6f rad/px",
+                         ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_NoRoundToFormat)) {
     MarkDirty();
   }
+  float mapZoomSensitivity = PortMapControls::ZoomSensitivity();
+  if (ImGui::SliderFloat("Sensitivity zoom map", &mapZoomSensitivity, 10.f, 300.f, "%.0f%%", ImGuiSliderFlags_AlwaysClamp)) {
+    PortMapControls::SetZoomSensitivity(mapZoomSensitivity);
+    MarkDirty();
+  }
+  ImGui::SetItemTooltip("Mouse wheel zoom speed on the map. Rotation uses mouse sensitivity.");
   if (ImGui::Checkbox("Invert X", &sInput.mouseInvertX)) {
     MarkDirty();
   }
@@ -6227,6 +6417,8 @@ void DrawControlsKeyboardMouse() {
   if (ImGui::Checkbox("Invert Y", &sInput.mouseInvertY)) {
     MarkDirty();
   }
+  if (ImGui::Checkbox("Invert map axis", &sInvertMapAxis)) MarkDirty();
+  ImGui::SetItemTooltip("Reverse Move U/D and Move L/R on the map. Does not affect map rotation.");
   ImGui::SameLine();
   if (ImGui::Checkbox("Weapon buttons", &sInput.mouseButtons)) {
     sMouseButtonGate.Reset();
@@ -6245,6 +6437,19 @@ void DrawControlsKeyboardMouse() {
     SetCrosshairSize(crosshairSize);
   }
   ImGui::SetItemTooltip("Applies under mouse aim and twin stick.");
+  if (ImGui::Checkbox(sAlwaysRun ? "Walk" : "Run", &sWalkEnabled)) MarkDirty();
+  ImGui::SetItemTooltip("Enable the keyboard Walk/Run modifier. Bind it in Controls > Remap > Move and aim.");
+  ImGui::SameLine();
+  ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10.f);
+  float& movementSpeed = sAlwaysRun ? sWalkSpeed : sRunSpeed;
+  if (ImGui::SliderFloat("Speed", &movementSpeed, sAlwaysRun ? 25.f : 70.f,
+                         sAlwaysRun ? 50.f : 100.f, "%.1f%%", ImGuiSliderFlags_NoRoundToFormat | ImGuiSliderFlags_AlwaysClamp)) MarkDirty();
+  ImGui::SetItemTooltip("Horizontal movement speed, including jumps and drops. Walk: 25-50%; Run: 70-100%.\n"
+                        "The transition is smooth; physical controller sticks keep their analog response.");
+  if (ImGui::Checkbox("Always run", &sAlwaysRun)) MarkDirty();
+  ImGui::SetItemTooltip("Checked: run normally, hold Walk to slow down.\n"
+                        "Unchecked: walk normally, hold Run to speed up.");
+
 
   ImGui::SeparatorText("Mouse buttons");
   ImGui::TextDisabled("Mouse buttons are bound in Controls > Remap (Keyboard & mouse).");
@@ -7898,6 +8103,7 @@ void DrawSaveStatesTab() {
     sSaveStateHotkeys = hotkeys;
     MarkDirty();
   }
+  ImGui::TextDisabled("Change keys in Controls > Remap > Port.");
   const bool running = sStateManager != nullptr;
   if (!running) {
     ImGui::TextDisabled("Saving and loading need a running game.");

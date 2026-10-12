@@ -63,6 +63,30 @@ struct Rig {
 } // namespace
 
 int main() {
+  // Keep the physical stick's magnitude when a walking keyboard binding wins
+  // the combined action. Releasing the keyboard must not leave a stale source.
+  {
+    Rig r;
+    r.profile.bindings = {Bind(Action::MainRight, {{Device::Key, 0, 50, 7}}),
+                          Bind(Action::MainRight, {Axis(kLeftX, 1)}),
+                          Bind(Action::Walk, {{Device::Key, 0, 50, 20}})};
+    r.Start();
+    r.raw.keys.set(7); r.raw.keys.set(20); r.raw.padAxes[kLeftX] = .75f;
+    const size_t a = size_t(Action::MainRight);
+    const Output& o = r.Step();
+    CHECK(o.Held(Action::Walk));
+    CHECK(Near(o.Value(Action::MainRight), 1.f));
+    CHECK(Near(o.keyboardValue[a], 1.f) && Near(o.otherValue[a], .75f));
+    r.raw.keys.reset();
+    r.Step();
+    CHECK(!o.Held(Action::Walk));
+    CHECK(Near(o.keyboardValue[a], 0.f) && Near(o.otherValue[a], .75f));
+    CHECK(Near(o.Value(Action::MainRight), .75f));
+    r.raw.padAxes[kLeftX] = 0.f;
+    r.Step();
+    CHECK(Near(o.otherValue[a], 0.f) && Near(o.Value(Action::MainRight), 0.f));
+  }
+
   // A plain press: held while down, pressed/released on the edges.
   {
     Rig r;

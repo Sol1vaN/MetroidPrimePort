@@ -3,6 +3,9 @@
 #include "Kyoto/Input/CFinalInput.hpp"
 #include "Kyoto/Math/CMath.hpp"
 #include "rstl/math.hpp"
+#ifdef TARGET_PC
+#include "port_display_controls.h"
+#endif
 
 CGuiWidget* CGuiSliderGroup::Create(CGuiFrame* frame, CInputStream& in, CSimplePool* sp) {
   CGuiWidgetParms parms = ReadWidgetHeader(frame, in);
@@ -45,6 +48,16 @@ bool CGuiSliderGroup::AddWorkerWidget(CGuiWidget* worker) {
 }
 
 void CGuiSliderGroup::ProcessUserInput(const CFinalInput& input) {
+#ifdef TARGET_PC
+  if (mContinuous) {
+    const bool left = input.DLALeft() || input.DDPLeft();
+    const bool right = input.DLARight() || input.DDPRight();
+    if (left != right) {
+      if (left) MAF_Decrement(nullptr, nullptr); else MAF_Increment(nullptr, nullptr);
+    }
+    return;
+  }
+#endif
   if (input.DLALeft()) {
     MAF_Decrement(nullptr, nullptr);
     return;
@@ -64,33 +77,45 @@ void CGuiSliderGroup::ProcessUserInput(const CFinalInput& input) {
 }
 
 void CGuiSliderGroup::Update(float dt) {
-  float delta = dt * (xbc_maxVal - xb8_minVal);
-  float upper;
-  for (upper = xb8_minVal; upper <= xc4_curVal; upper += xc8_increment) {
-  }
-  upper = rstl::min_val(xbc_maxVal, upper);
-  float lower = upper - xc8_increment;
-  float oldCur = xc4_curVal;
-  if (xf0_state == kS_Decreasing) {
-    if (xf4_24_inputPending) {
-      xc4_curVal = rstl::max_val(xb8_minVal, oldCur - delta);
-    } else {
-      xc4_curVal = rstl::max_val(lower, oldCur - delta);
+#ifdef TARGET_PC
+  if (mContinuous) {
+    const float old = xc4_curVal;
+    const int direction = !xf4_24_inputPending ? 0 : xf0_state == kS_Decreasing ? -1 : xf0_state == kS_Increasing ? 1 : 0;
+    xc4_curVal = PortDisplayControls::MoveSlider(old, direction, dt, xb8_minVal, xbc_maxVal);
+    xc0_roundedCurVal = xc4_curVal;
+    if (old == xc4_curVal) xf0_state = kS_None;
+    else if (xd8_changeCallback) xd8_changeCallback(this, old);
+  } else
+#endif
+  {
+    float delta = dt * (xbc_maxVal - xb8_minVal);
+    float upper;
+    for (upper = xb8_minVal; upper <= xc4_curVal; upper += xc8_increment) {
     }
-  } else if (xf0_state == kS_Increasing) {
-    if (xf4_24_inputPending) {
-      xc4_curVal = rstl::min_val(xbc_maxVal, oldCur + delta);
-    } else if (xc4_curVal != lower) {
-      xc4_curVal = rstl::min_val(upper, oldCur + delta);
+    upper = rstl::min_val(xbc_maxVal, upper);
+    float lower = upper - xc8_increment;
+    float oldCur = xc4_curVal;
+    if (xf0_state == kS_Decreasing) {
+      if (xf4_24_inputPending) {
+        xc4_curVal = rstl::max_val(xb8_minVal, oldCur - delta);
+      } else {
+        xc4_curVal = rstl::max_val(lower, oldCur - delta);
+      }
+    } else if (xf0_state == kS_Increasing) {
+      if (xf4_24_inputPending) {
+        xc4_curVal = rstl::min_val(xbc_maxVal, oldCur + delta);
+      } else if (xc4_curVal != lower) {
+        xc4_curVal = rstl::min_val(upper, oldCur + delta);
+      }
     }
-  }
-  if (oldCur == xc4_curVal) {
-    xf0_state = kS_None;
-  }
-  float oldRounded = xc0_roundedCurVal;
-  xc0_roundedCurVal = upper - xc4_curVal > xc4_curVal - lower ? lower : upper;
-  if (oldRounded != xc0_roundedCurVal && xd8_changeCallback) {
-    xd8_changeCallback(this, oldRounded);
+    if (oldCur == xc4_curVal) {
+      xf0_state = kS_None;
+    }
+    float oldRounded = xc0_roundedCurVal;
+    xc0_roundedCurVal = upper - xc4_curVal > xc4_curVal - lower ? lower : upper;
+    if (oldRounded != xc0_roundedCurVal && xd8_changeCallback) {
+      xd8_changeCallback(this, oldRounded);
+    }
   }
   const float factor =
       xbc_maxVal == xb8_minVal ? 0.f : (xc4_curVal - xb8_minVal) / (xbc_maxVal - xb8_minVal);

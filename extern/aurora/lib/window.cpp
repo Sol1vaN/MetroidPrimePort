@@ -267,7 +267,18 @@ void process_event(SDL_Event& event) {
   case SDL_EVENT_MOUSE_WHEEL:
     if (primaryWindow) {
       input::set_mouse_scroll(event.wheel.x, event.wheel.y);
+      bool captured = false;
+#ifdef AURORA_ENABLE_GX
+      captured = imgui::wants_capture_event(event);
+#endif
+      if (!captured && SDL_GetKeyboardFocus() == g_window &&
+          event.wheel.which != SDL_TOUCH_MOUSEID && event.wheel.which != SDL_PEN_MOUSEID) {
+        input::queue_mouse_wheel(event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -event.wheel.y : event.wheel.y);
+      }
     }
+    break;
+  case SDL_EVENT_WINDOW_FOCUS_LOST:
+    if (primaryWindow) input::clear_mouse_wheel();
     break;
   case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
     if (primaryWindow) {

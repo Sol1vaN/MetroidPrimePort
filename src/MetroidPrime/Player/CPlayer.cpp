@@ -1,4 +1,6 @@
 #include "MetroidPrime/Player/CPlayer.hpp"
+#include "port_feedback.h"
+#include "port_movement_bob.h"
 
 #include "port_console.h"
 #include "port_debug.h"
@@ -1162,17 +1164,17 @@ void CPlayer::UpdateFootstepSounds(const CFinalInput& input, CStateManager& mgr,
   if (x2f8_morphBallState == kMS_Unmorphed && x258_movementState == NPlayer::kMS_OnGround &&
       !x3dc_inFreeLook && !x3dd_lookButtonHeld) {
     char sfxVol = 127;
-    x78c_footstepSfxTimer += dt;
+
     float turn = TurnInput(input);
     const float forward = fabsf(ForwardInput(input, turn));
     turn = fabsf(turn);
     float sfxDelay = 0.f;
-    if (forward > 0.05f || x304_orbitState != kOS_NoOrbit) {
-      CVector3f velocity = GetVelocityWR();
-      float mag = velocity.Magnitude();
-      float vel = rstl::min_val(mag / GetActualFirstPersonMaxVelocity(dt), 1.f);
-      if (vel > 0.05f) {
-        sfxDelay = (0.375f - 0.85f) * vel + 0.85f;
+    const CVector3f velocity = GetVelocityWR();
+    const float vel = PortMovementBob::SpeedFraction(velocity.GetX(), velocity.GetY(),
+                                                      GetActualFirstPersonMaxVelocity(dt));
+    if (vel > 0.f || forward > 0.05f || x304_orbitState != kOS_NoOrbit) {
+      if (vel > 0.f) {
+        sfxDelay = 0.375f / PortMovementBob::Cadence(vel);
         if (x790_footstepSfxSel == kFS_None) {
           x790_footstepSfxSel = kFS_Left;
         }
@@ -1190,7 +1192,7 @@ void CPlayer::UpdateFootstepSounds(const CFinalInput& input, CStateManager& mgr,
       }
       if (x790_footstepSfxSel == kFS_None) {
         x790_footstepSfxSel = kFS_Left;
-        sfxDelay = x78c_footstepSfxTimer;
+        x78c_footstepSfxTimer = 1.f;
       }
       sfxVol = 96;
     } else {
@@ -1198,7 +1200,8 @@ void CPlayer::UpdateFootstepSounds(const CFinalInput& input, CStateManager& mgr,
       x790_footstepSfxSel = kFS_None;
     }
 
-    if (x790_footstepSfxSel != kFS_None && x78c_footstepSfxTimer > sfxDelay) {
+    if (x790_footstepSfxSel != kFS_None &&
+        PortFeedback::Footstep(x78c_footstepSfxTimer, dt, sfxDelay)) {
       static const float earHeight = GetEyeHeight() - 0.1f;
       if (IsInFluid() && x828_distanceUnderWater > 0.f && x828_distanceUnderWater < earHeight) {
         if (x82c_inLava) {
@@ -1226,13 +1229,15 @@ void CPlayer::UpdateFootstepSounds(const CFinalInput& input, CStateManager& mgr,
         DoSfxEffects(CSfxManager::SfxStart(sfx, sfxVol, 64, true));
       }
 
-      x78c_footstepSfxTimer = 0.f;
       if (x790_footstepSfxSel == kFS_Left) {
         x790_footstepSfxSel = kFS_Right;
       } else {
         x790_footstepSfxSel = kFS_Left;
       }
     }
+  } else {
+    x78c_footstepSfxTimer = 0.f;
+    x790_footstepSfxSel = kFS_None;
   }
 }
 

@@ -108,6 +108,10 @@ int main() {
   Check(!aim.Preview(1.f, 1.f, sensitivity, false, false, previewYaw, previewPitch));
   Check(!aim.Update(true, false, 0.f, 0.f, 0.f, 1.f, 1.f, sensitivity, false, false));
 
+  aim.Reset();
+  Check(aim.Update(true, false, 0.f, 1.f, 0.f, 100.f, -100.f, 0.0001f, false, false));
+  Check(Near(aim.yaw, -0.01f) && Near(aim.pitch, 0.01f));
+
   PortMouse::ButtonGate buttons;
   Check(buttons.Poll(true, 1) == 0); // click used to enter capture/UI is not fire
   Check(buttons.Poll(true, 1) == 0);

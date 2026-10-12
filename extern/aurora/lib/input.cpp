@@ -1,4 +1,5 @@
 #include "input.hpp"
+#include "mouse_wheel.hpp"
 #include "device.hpp"
 #include "internal.hpp"
 #include "io.hpp"
@@ -506,6 +507,11 @@ struct MouseScrollStatus {
 };
 
 static MouseScrollStatus g_MouseStatus;
+static MouseWheelPulses g_MouseWheel;
+void queue_mouse_wheel(float delta) noexcept { g_MouseWheel.Add(delta); }
+void clear_mouse_wheel() noexcept { g_MouseWheel.Clear(); }
+int poll_mouse_wheel() noexcept { return g_MouseWheel.Poll(); }
+int held_mouse_wheel() noexcept { return g_MouseWheel.Held(); }
 
 void set_mouse_scroll(const float scrollX, const float scrollY) noexcept {
   g_MouseStatus.scrollX = scrollX;

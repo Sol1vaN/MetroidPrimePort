@@ -2,6 +2,10 @@
 #include "port_debug.h"
 #include "port_room_env.h"
 #include "port_synthetic_effect.h"
+#ifdef TARGET_PC
+#include <SDL3/SDL_timer.h>
+#include <SDL3/SDL_keyboard.h>
+#endif
 #ifdef MP_ENABLE_SMOKE_DRIVER
 #include "port_smoke.h"
 #endif
@@ -636,6 +640,51 @@ void CPlayerGun::Render(const CStateManager& mgr, const CVector3f& pos,
     // Render their relative pose against that same camera, not an interpolated
     // world camera from a different tick. Projectile simulation is unchanged.
     CGraphics::SetViewPointMatrix(mgr.GetCameraManager()->GetSimulationCameraTransform(mgr));
+  }
+#endif
+#ifdef TARGET_PC
+  // Compose a visual layer after the native pose interpolation. Moving this
+  // draw's view keeps the cannon, suit arm and attached muzzle effects together,
+  // without changing any animation, gun locator, projectile or HUD transform.
+  const int frame = CGraphics::GetFrameCounter();
+  if (mPortSwayFrame != frame) {
+    const double now = double(SDL_GetTicksNS()) * 1.e-9;
+    const CPlayer& player = *mgr.GetPlayer();
+    const CVector3f eye = player.GetEyePosition();
+    const bool active = player.MouseLookIsFree(mgr) && PortDebug::AimInitialized() &&
+        !PortDebug::Visible() && SDL_GetKeyboardFocus() != nullptr &&
+        mgr.GetGameState() == CStateManager::kGS_Running && !player.GetFrozenState() &&
+        player.GetGrappleState() == CPlayer::kGS_None &&
+        player.GetGunHolsterState() == CPlayer::kGH_Drawn;
+    // Rebase after hidden frames / teleports so resuming never becomes a flick.
+    if (mPortSwayFrame < 0 || frame - mPortSwayFrame != 1 ||
+        (eye - mPortSwayEye).MagSquared() > 25.f) mPortWeaponSway.Reset();
+    float yawAhead = 0.f, pitchAhead = 0.f;
+    PortDebug::PresentedAimDelta(CCameraManager::GetPresentationInterpolation(), yawAhead, pitchAhead);
+    mPortWeaponSway.Update(active, PortDebug::WeaponSway(), now - mPortSwayTime,
+                          PortDebug::AimYaw() + yawAhead, PortDebug::AimPitch() + pitchAhead);
+    mPortSwayFrame = frame; mPortSwayTime = now; mPortSwayEye = eye;
+  }
+  if (PortDebug::WeaponSway() != PortWeaponSway::None || PortDebug::ViewmodelEnabled()) {
+    const auto sway = mPortWeaponSway.GetPose(PortDebug::WeaponSwayStrength());
+    const CTransform4f nativeView = CGraphics::GetViewMatrix();
+    const CTransform4f gunCameraXf = nativeView.GetQuickInverse() *
+        CTransform4f::Translate(pos) * GetGunMotionTransform();
+    // Use the beam model's rear arm attachment, not an estimated offset from
+    // the gun origin. Blend the anchor when changing sway styles.
+    const CVector3f root = gunCameraXf.GetTranslation();
+    const CVector3f elbow = gunCameraXf * x508_elbowLocalXf.GetTranslation();
+    const CVector3f pivot = root + (elbow - root) * float(sway.elbowWeight);
+    CVector3f placement = CVector3f::Zero();
+    float right, forward, up;
+    if (PortDebug::ViewmodelPosition(right, forward, up))
+      placement = CVector3f(right, forward, up) - gpTweakPlayerGun->x4c_gunPosition;
+    const auto m = PortWeaponSway::VisualTransform(sway,
+        {pivot.GetX(), pivot.GetY(), pivot.GetZ()},
+        {placement.GetX(), placement.GetY(), placement.GetZ()});
+    const CTransform4f visual(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7],
+                              m[8], m[9], m[10], m[11]);
+    CGraphics::SetViewPointMatrix(nativeView * visual.GetQuickInverse());
   }
 #endif
   const CGraphics::CProjectionState projState = CGraphics::GetProjectionState();

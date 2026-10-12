@@ -1,4 +1,5 @@
 #include "../../input.hpp"
+#include "../../keyboard_walk.hpp"
 #include "../../device.hpp"
 #include "../../internal.hpp"
 #include "../../io.hpp"
@@ -263,6 +264,9 @@ struct PADKeyboardState {
 };
 
 std::array<PADKeyboardState, PAD_MAX_CONTROLLERS> g_keyboardBindings;
+std::array<float, PAD_MAX_CONTROLLERS> g_keyboardStickScale = {1.f,1.f,1.f,1.f};
+std::array<bool, PAD_MAX_CONTROLLERS> g_keyboardOwnsMovement{};
+std::array<s32, PAD_MAX_CONTROLLERS> g_overrideKeyboardX{}, g_overrideKeyboardY{};
 
 struct PADCLampRegion {
   uint8_t minTrigger;
@@ -309,6 +313,8 @@ std::array<bool, PAD_CHANMAX> g_portOverrideSet{};
 
 bool is_mouse_scancode(const s32 scancode) { return scancode < PAD_KEY_INVALID; }
 bool is_mouse_button_pressed(const s32 scancode) {
+  if (scancode == PAD_KEY_MOUSE_WHEEL_UP) return aurora::input::held_mouse_wheel() > 0;
+  if (scancode == PAD_KEY_MOUSE_WHEEL_DOWN) return aurora::input::held_mouse_wheel() < 0;
   const int32_t buttonNum = -(scancode + 1);
   if (buttonNum < 1 || buttonNum > 5) {
     return false;
@@ -797,7 +803,25 @@ static void merge_virtual_status(PADStatus& status, const PADStatus& virtualStat
   status.analogB = std::max(status.analogB, virtualStatus.analogB);
 }
 
+void PADClearMouseWheel() { aurora::input::clear_mouse_wheel(); }
+s32 PADGetMouseWheelDirection() { return aurora::input::held_mouse_wheel(); }
+
+f32 PADGetKeyboardWalkScale(u32 port) {
+  return port<PAD_MAX_CONTROLLERS && g_keyboardOwnsMovement[port] ? g_keyboardStickScale[port] : 1.f;
+}
+void PADSetKeyboardStickScale(u32 port, f32 scale) {
+  if(port<PAD_MAX_CONTROLLERS) g_keyboardStickScale[port]=std::isfinite(scale)?std::clamp(scale,0.f,1.f):1.f;
+}
+
+void PADSetKeyboardOverride(u32 port, s32 x, s32 y, f32 scale) {
+  if (port >= PAD_MAX_CONTROLLERS) return;
+  g_overrideKeyboardX[port] = x; g_overrideKeyboardY[port] = y;
+  PADSetKeyboardStickScale(port, scale);
+}
+
 u32 PADRead(PADStatus* status) {
+  if (g_blockPAD || SDL_GetKeyboardFocus() == nullptr) aurora::input::clear_mouse_wheel();
+  aurora::input::poll_mouse_wheel();
   if (!g_initialized) {
     Log.fatal("PADRead called before PADInit()!");
   }
@@ -810,6 +834,8 @@ u32 PADRead(PADStatus* status) {
   uint32_t rumbleSupport = 0;
   for (uint32_t i = 0; i < PAD_CHANMAX; ++i) {
     memset(&status[i], 0, sizeof(PADStatus));
+    int keyboardX=0, keyboardY=0;
+    g_keyboardOwnsMovement[i]=false;
     // Support device rumble on port 0 regardless of whether a controller is connected.
     if (device_rumble_available_for_port(i)) {
       rumbleSupport |= PAD_CHAN0_BIT;
@@ -828,6 +854,7 @@ u32 PADRead(PADStatus* status) {
 
     status[i].err = PAD_ERR_NONE;
     if (overridden) {
+      keyboardX = g_overrideKeyboardX[i]; keyboardY = g_overrideKeyboardY[i];
       status[i] = g_portOverride[i];
       status[i].err = PAD_ERR_NONE;
     } else if (g_keyboardBindings[i].m_mappingsSet) {
@@ -893,6 +920,10 @@ u32 PADRead(PADStatus* status) {
           break;
         }
       }
+      const bool diagonal = lx != 0 && ly != 0;
+      lx = aurora::input::KeyboardWalkAxis(lx, diagonal, g_keyboardStickScale[i]);
+      ly = aurora::input::KeyboardWalkAxis(ly, diagonal, g_keyboardStickScale[i]);
+      keyboardX=lx; keyboardY=ly;
       status[i].stickX = static_cast<s8>(std::clamp(static_cast<int>(status[i].stickX) + lx, -127, 127));
       status[i].stickY = static_cast<s8>(std::clamp(static_cast<int>(status[i].stickY) + ly, -127, 127));
       status[i].substickX = static_cast<s8>(std::clamp(static_cast<int>(status[i].substickX) + rx, -127, 127));
@@ -1054,6 +1085,8 @@ u32 PADRead(PADStatus* status) {
         merge_virtual_status(status[i], g_virtualPadStatus[i]);
       }
     }
+    g_keyboardOwnsMovement[i]=aurora::input::KeyboardOwnsMovement(
+        keyboardX,keyboardY,status[i].stickX,status[i].stickY);
   }
   return rumbleSupport;
 }
@@ -1811,6 +1844,7 @@ void PADRestoreDefaultMapping(const u32 port) {
 }
 
 void PADBlockInput(const bool block) {
+  if (block != g_blockPAD) aurora::input::clear_mouse_wheel();
   if (g_blockPAD && !block) {
     g_suppressHeldOnRead = true;
   }

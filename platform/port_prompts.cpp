@@ -153,6 +153,7 @@ struct KeyIcon {
   const char* stem;
 };
 constexpr KeyIcon kKeyIcons[] = {
+    {SDL_SCANCODE_MENU, "keyboard_menu"}, {SDL_SCANCODE_APPLICATION, "keyboard_menu"},
     {SDL_SCANCODE_A, "keyboard_a"}, {SDL_SCANCODE_B, "keyboard_b"},
     {SDL_SCANCODE_C, "keyboard_c"}, {SDL_SCANCODE_D, "keyboard_d"},
     {SDL_SCANCODE_E, "keyboard_e"}, {SDL_SCANCODE_F, "keyboard_f"},
@@ -210,6 +211,7 @@ constexpr KeyIcon kKeyIcons[] = {
     {SDL_SCANCODE_NUMLOCKCLEAR, "keyboard_numlock"},
     {PAD_KEY_MOUSE_LEFT, "mouse_left"}, {PAD_KEY_MOUSE_RIGHT, "mouse_right"},
     {PAD_KEY_MOUSE_MIDDLE, "mouse_scroll"},
+    {PAD_KEY_MOUSE_WHEEL_UP, "mouse_scroll"}, {PAD_KEY_MOUSE_WHEEL_DOWN, "mouse_scroll"},
     {PAD_KEY_MOUSE_X1, "mouse_side_back"}, {PAD_KEY_MOUSE_X2, "mouse_side_forward"},
 };
 
@@ -493,30 +495,12 @@ const char* StemForScancode(int scancode) {
 
 // The key bound to `button` (the main key, else the second), or PAD_KEY_INVALID.
 int KeyForButton(PADButton button) {
-  for (u32 slot = 0; slot < PAD_KEY_SLOT_COUNT; ++slot) {
-    u32 count = 0;
-    PADKeyButtonBinding* bindings = PADGetKeyButtonBindingsSlot(PAD_CHAN0, slot, &count);
-    for (u32 i = 0; bindings != nullptr && i < count; ++i) {
-      if (bindings[i].padButton == button && bindings[i].scancode != PAD_KEY_INVALID) {
-        return bindings[i].scancode;
-      }
-    }
-  }
-  return PAD_KEY_INVALID;
+  return PortInputDevices::KeyBindingForPad(false, button);
 }
 
 // The key that pushes `axis` (the main key, else the second), or PAD_KEY_INVALID.
 int KeyForAxis(PADAxis axis) {
-  for (u32 slot = 0; slot < PAD_KEY_SLOT_COUNT; ++slot) {
-    u32 count = 0;
-    PADKeyAxisBinding* bindings = PADGetKeyAxisBindingsSlot(PAD_CHAN0, slot, &count);
-    for (u32 i = 0; bindings != nullptr && i < count; ++i) {
-      if (bindings[i].padAxis == axis && bindings[i].scancode != PAD_KEY_INVALID) {
-        return bindings[i].scancode;
-      }
-    }
-  }
-  return PAD_KEY_INVALID;
+  return PortInputDevices::KeyBindingForPad(true, axis);
 }
 
 // A whole stick or D-pad on keys: the cluster icon when the four keys are one
@@ -777,6 +761,13 @@ void Apply(size_t index, const std::string& stem) {
 } // namespace
 
 namespace PortPrompts {
+bool ReadKeyGlyph(int scancode, std::vector<uint8_t>& bytes) {
+  const char* stem=StemForScancode(scancode);
+  if (!stem) return false;
+  const auto path=FindIconFile(std::string(stem)+".dds");
+  return !path.empty() && ReadIconFile(path,bytes);
+}
+
 // "gamecube" has no static set, which is deliberate: the game's own prompt art
 // already is the GameCube set, so only a remapped GC pad button gets an icon
 // (GameCubeStemForButton).

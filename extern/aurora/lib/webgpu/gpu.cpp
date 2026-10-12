@@ -57,6 +57,15 @@ static wgpu::BindGroupLayout g_CopyBindGroupLayout;
 wgpu::RenderPipeline g_CopyPipeline;
 wgpu::RenderPipeline g_CopyPremultipliedAlphaPipeline;
 wgpu::BindGroup g_CopyBindGroup;
+static std::atomic<float> g_DisplayBrightness{1.f};
+static wgpu::Buffer g_DisplayUniformBuffer;
+void set_display_brightness(float gain) noexcept {
+  if (std::isfinite(gain)) g_DisplayBrightness.store(std::clamp(gain, 0.f, 2.f), std::memory_order_relaxed);
+}
+void update_display_brightness() {
+  const std::array<float, 4> params{g_DisplayBrightness.load(std::memory_order_relaxed), 0.f, 0.f, 0.f};
+  g_queue.WriteBuffer(g_DisplayUniformBuffer, 0, params.data(), sizeof(params));
+}
 static AuroraSampler g_Resampler = SAMPLER_BILINEAR;
 static wgpu::BindGroupLayout g_ResampleBindGroupLayout;
 static wgpu::RenderPipeline g_ResamplePipeline;
@@ -429,6 +438,8 @@ void create_copy_pipeline() {
 var efb_sampler: sampler;
 @group(0) @binding(1)
 var efb_texture: texture_2d<f32>;
+@group(0) @binding(2)
+var<uniform> display_params: vec4<f32>;
 
 struct VertexOutput {
     @builtin(position) pos: vec4<f32>,
@@ -457,7 +468,7 @@ fn vs_main(@builtin(vertex_index) vtxIdx: u32) -> VertexOutput {
 @fragment
 fn fs_opaque(in: VertexOutput) -> @location(0) vec4<f32> {
     let color = textureSample(efb_texture, efb_sampler, in.uv);
-    return vec4(color.rgb, 1.0);
+    return vec4(clamp(color.rgb * display_params.x, vec3(0.0), vec3(1.0)), 1.0);
 }
 
 @fragment
@@ -488,7 +499,19 @@ fn fs_premultiplied_alpha(in: VertexOutput) -> @location(0) vec4<f32> {
                   .viewDimension = wgpu::TextureViewDimension::e2D,
               },
       },
+      wgpu::BindGroupLayoutEntry{
+          .binding = 2,
+          .visibility = wgpu::ShaderStage::Fragment,
+          .buffer = {.type = wgpu::BufferBindingType::Uniform, .minBindingSize = 16},
+      },
   };
+  const wgpu::BufferDescriptor brightnessBufferDescriptor{
+      .label = "Display brightness",
+      .usage = wgpu::BufferUsage::Uniform | wgpu::BufferUsage::CopyDst,
+      .size = 16,
+  };
+  g_DisplayUniformBuffer = g_device.CreateBuffer(&brightnessBufferDescriptor);
+  update_display_brightness();
   const wgpu::BindGroupLayoutDescriptor bindGroupLayoutDescriptor{
       .entryCount = bindGroupLayoutEntries.size(),
       .entries = bindGroupLayoutEntries.data(),
@@ -648,6 +671,7 @@ wgpu::BindGroup create_copy_bind_group(const TextureWithSampler& source) {
           .binding = 1,
           .textureView = source.view,
       },
+      wgpu::BindGroupEntry{.binding = 2, .buffer = g_DisplayUniformBuffer, .size = 16},
   };
   const wgpu::BindGroupDescriptor bindGroupDescriptor{
       .layout = g_CopyBindGroupLayout,
@@ -1243,6 +1267,7 @@ void shutdown() {
   g_CopyPipeline = {};
   g_CopyPremultipliedAlphaPipeline = {};
   g_CopyBindGroup = {};
+  g_DisplayUniformBuffer = {};
   g_ResampleBindGroupLayout = {};
   g_ResamplePipeline = {};
   g_ResampleUniformBuffer = {};

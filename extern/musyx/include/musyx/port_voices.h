@@ -24,6 +24,13 @@ typedef struct PortMusyxVoice {
 } PortMusyxVoice;
 #pragma pack(pop)
 
+// Hold the mixer while creating a voice and arming its initial silent gate.
+void MusyxPortBeginVoiceUpdate(void);
+void MusyxPortEndVoiceUpdate(void);
+
+// Map travel in teeth over dt seconds. Negative teeth restores the native loop.
+void MusyxPortSetVoiceStepTravel(uint32_t voice,float teeth,float dt);
+
 // Copies the currently active voices (up to maxVoices) and returns the count.
 int MusyxPortCopyVoices(PortMusyxVoice* out, int maxVoices);
 int MusyxPortIsSampleMuted(unsigned smpId);

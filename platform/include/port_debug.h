@@ -136,6 +136,16 @@ void SetTickPeriod(float dt);
 float TickFrames();
 
 // Presentation
+// -1: none (default); 0: stick follow; 1: inertia. Presentation only.
+int WeaponSway();
+float WeaponSwayStrength();
+bool ViewmodelEnabled();
+float ViewmodelFov();
+bool ViewmodelPosition(float& right, float& forward, float& up);
+float ScreenBrightness();
+void SetScreenBrightness(float percent);
+// Dispatch remappable hotkeys; true asks the main loop to toggle its frame limiter.
+int LegacyPortHotkey(int action);
 bool FrameLimitEnabled();
 // Frames a second the main loop is paced to: 60 under the 60 FPS cap, else the
 // FPS cap setting (fps_cap=, MP_FPS_CAP); 0 = unlimited.
@@ -467,7 +477,12 @@ bool MouseGameplayActive();
 void SetMouseGameplayActive(bool active);
 bool MouseInvertX();
 bool MouseInvertY();
+bool InvertMapAxis();
 bool MouseButtons();
+bool AlwaysRun();
+int WalkBinding(int slot);
+void SetWalkBinding(int slot, int code);
+float KeyboardWalkScale(float dt);
 bool MouseCrosshair();
 // Crosshair size in percent while mouse aim or twin stick is on (the retail
 // free-aim crosshair is sized for a held R, and it stays up the whole time

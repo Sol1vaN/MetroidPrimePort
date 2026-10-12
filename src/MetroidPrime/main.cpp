@@ -12,6 +12,7 @@
 #include <SDL3/SDL_timer.h>
 
 #include "port_debug.h"
+#include "port_map_controls.h"
 #include "port_log.h"
 #include "port_disc.h"
 #include "port_mods.h"
@@ -950,15 +951,6 @@ int CMain::RsMain(int argc, const char* const* argv) {
         while (event != nullptr && event->type != AURORA_NONE) {
           if (event->type == AURORA_EXIT) {
             x160_24_finished = true;
-          } else if (event->type == AURORA_SDL_EVENT && event->sdl.type == SDL_EVENT_KEY_DOWN &&
-                     !event->sdl.key.repeat && event->sdl.key.scancode == SDL_SCANCODE_F10) {
-            PortDebug::SetFrameLimitEnabled(!PortDebug::FrameLimitEnabled());
-            nextFrameDeadline = SDL_GetTicksNS();
-            if (PortDebug::FrameRateCap() > 0) {
-              fprintf(stderr, "Frame limit: %d FPS\n", PortDebug::FrameRateCap());
-            } else {
-              fprintf(stderr, "Frame limit: unlimited\n");
-            }
           } else if (event->type == AURORA_WINDOW_RESIZED ||
                      event->type == AURORA_DISPLAY_SCALE_CHANGED) {
             ApplyAspectMode();
@@ -970,6 +962,10 @@ int CMain::RsMain(int argc, const char* const* argv) {
                 event->sdl.motion.which != SDL_PEN_MOUSEID) {
               PortDebug::AddMouseDelta(event->sdl.motion.xrel, event->sdl.motion.yrel);
             }
+          } else if (event->type == AURORA_SDL_EVENT && event->sdl.type == SDL_EVENT_MOUSE_WHEEL) {
+            if (event->sdl.wheel.which != SDL_TOUCH_MOUSEID && event->sdl.wheel.which != SDL_PEN_MOUSEID)
+              PortMapControls::AddWheel(event->sdl.wheel.y *
+                  (event->sdl.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -1.f : 1.f));
           } else if (event->type == AURORA_SDL_EVENT &&
                      (event->sdl.type == SDL_EVENT_MOUSE_BUTTON_DOWN ||
                       event->sdl.type == SDL_EVENT_MOUSE_BUTTON_UP)) {
@@ -1018,7 +1014,7 @@ int CMain::RsMain(int argc, const char* const* argv) {
         }
         if (sCaptureWindow != nullptr) {
           const bool focused = SDL_GetKeyboardFocus() == sCaptureWindow;
-          const bool wantRelative = PortDebug::MouseAim() && PortDebug::MouseGameplayActive() &&
+          const bool wantRelative = PortDebug::MouseAim() && (PortDebug::MouseGameplayActive() || PortDebug::MapScreenOpen()) &&
                                     !PortDebug::Visible() && focused;
 #ifdef __ANDROID__
           // A free (hidden) cursor flung to the screen edge brings up the nav bar

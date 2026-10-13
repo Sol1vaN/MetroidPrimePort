@@ -1,3 +1,18 @@
+# Sol1vaN's custom Metroid Prime Port build
+
+**Windows x86_64: [Download custom28 — based on v0.23.0](https://github.com/Sol1vaN/MetroidPrimePort/raw/refs/heads/custom-build-downloads/metroid-prime-port-0.23.0-windows-x86_64.zip)**
+
+[Custom source](https://github.com/Sol1vaN/MetroidPrimePort/tree/custom28-v023) · [Features and validation](https://github.com/Sol1vaN/MetroidPrimePort/blob/custom28-v023/docs/CUSTOM_BUILD.md) · [SHA256 checksum](https://github.com/Sol1vaN/MetroidPrimePort/raw/refs/heads/custom-build-downloads/metroid-prime-port-0.23.0-windows-x86_64.zip.sha256)
+
+This is Sol1vaN's custom build. It preserves the upstream v0.23 changes alongside the additional input, weapon sway, viewmodel and map QoL features described in the notes. The executable identifies itself as **0.23.0-custom28**. The ZIP contains the compiled executable, runtime dependencies and licences. Supply your own disc image; no disc, save files or personal settings are distributed.
+
+Executable SHA256: `bc5815d5b9701277c96de4dfb0fc05f539d9a7a9113a63911ee7ab910eb99eb6`  
+ZIP SHA256: `3ba3b2c80e914c6b233779aa5e949120c4052ff7b73febe56d5508d02cf2286e`
+
+79/79 automated integration tests passed on Windows. Further manual v0.23 gameplay coverage remains open. See [upstream MetroidPrimePort](https://github.com/Odrannnn/MetroidPrimePort) for the original project and official releases.
+
+---
+
 # Metroid Prime — native port
 
 A native build of **Metroid Prime** (GameCube, USA v1.00, v1.01 or v1.02 `GM8E01`, or PAL `GM8P01` as experimental) for Linux,

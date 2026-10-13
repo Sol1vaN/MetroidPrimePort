@@ -10,9 +10,9 @@ These changes were developed with Codex assistance and iterated through user pla
 
 - High-DPI mouse sensitivity: a logarithmic range down to 0.000001 rad/px, six displayed decimals and no slider rounding to the display format.
 - Frame-limit hotkey remapping, including clearing its binding.
-- Continuous screen brightness applied to the rendered image, with smoother native-menu adjustment.
+- Restored working Screen Brightness: connect the original option to final-frame rendering, keep the native and F1 controls synchronized, and replace coarse integer stepping with smooth continuous adjustment while retaining the Metroid menu's click feedback.
 - Optional Stick Sway and Inertia Sway, with separate strength controls, rear-arm pivoting and procedural pointing; None is the default.
-- Viewmodel Position, referenced from PrimeHack's adjustment concept, with automatic/manual positioning and a reset to the original presentation.
+- Independent Viewmodel FOV, proposed as an addition to upstream v0.23's existing arm cannon offset section. Upstream already provides the three position sliders; duplicating those controls is no longer part of the contribution request. The earlier PrimeHack-inspired positioning remains in this historical reference build.
 - Keyboard Walk/Run with Always run, configurable speeds and gradual transitions, including horizontal movement during jumps and drops.
 - Movement-speed-driven bobbing and footstep timing across simulation rates.
 - Aspect-correct electrical visor damage effects.

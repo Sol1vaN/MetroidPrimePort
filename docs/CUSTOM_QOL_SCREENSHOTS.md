@@ -26,12 +26,18 @@ The Walk action is remappable alongside the movement actions:
 
 ## Weapon sway and viewmodel adjustment
 
-The custom UI offers None, Stick Sway and Inertia Sway, a strength control, and viewmodel adjustment with automatic/manual modes, a separate viewmodel FOV, three position controls and Reset.
+The screenshot shows the earlier combined custom UI, including None, Stick Sway and Inertia Sway, strength and Viewmodel FOV. Since upstream v0.23 already implements the three arm cannon position sliders, the remaining viewmodel contribution request is **only a separate Viewmodel FOV control added to that existing section**, independent of the world-camera FOV. The additional positioning controls pictured here are historical context, not an additional implementation request.
 
 ![Custom weapon sway and viewmodel adjustment UI](images/custom-qol/weapon-sway-viewmodel-settings.png)
 
-The **Viewmodel Position / weapon viewmodel adjustment concept is referenced from [PrimeHack](https://github.com/shiiion/dolphin)**, particularly its automatic/manual adjustment and left/right, forward/backward and up/down controls. The image below is the PrimeHack reference used for this feature; it is not a screenshot of MetroidPrimePort. The custom port implementation adds its own UI and reset behavior.
+The **Viewmodel Position / weapon viewmodel adjustment concept is referenced from [PrimeHack](https://github.com/shiiion/dolphin)**, particularly its automatic/manual adjustment and left/right, forward/backward and up/down controls. The image below is the PrimeHack reference used for this feature; it is not a screenshot of MetroidPrimePort. The reference explains the original positioning inspiration. Those position controls are now covered by upstream v0.23; the contribution request is limited to independent Viewmodel FOV.
 
 ![PrimeHack reference: Viewmodel Position controls](images/custom-qol/primehack-viewmodel-reference.png)
+
+## Restored screen brightness
+
+The original **Screen Brightness** option now affects the final rendered image. The native menu slider uses a continuous 0–100 range instead of the original coarse integer steps, with smooth dragging and the game's characteristic click feedback. The F1 Screen brightness control and the original menu operate the same setting; 50% is neutral. This is a functional restoration as well as a smoother control.
+
+![Restored Screen Brightness in the original Metroid Prime options menu](images/custom-qol/restored-screen-brightness.png)
 
 Screenshots supplied by Sol1vaN. PrimeHack reference UI credited to the PrimeHack project; game artwork remains attributable to its original creators.

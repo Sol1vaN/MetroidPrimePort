@@ -34,6 +34,20 @@ The **Viewmodel Position / weapon viewmodel adjustment concept is referenced fro
 
 ![PrimeHack reference: Viewmodel Position controls](images/custom-qol/primehack-viewmodel-reference.png)
 
+## Aspect-correct electrical visor effects
+
+The electrical received-damage overlay was still framed for the original 4:3 presentation. On a widescreen display, the lightning could stop short of the edges. The correction adapts the visor effect to the actual viewport aspect ratio and camera FOV, preserving the original effect artwork and animation.
+
+**Before — original 4:3 framing on a widescreen display:**
+
+![Electrical visor damage overlay before aspect correction, still using its original 4:3 framing](images/custom-qol/electrical-visor-before-4-3.png)
+
+**After — overlay adapted to the full 16:9 display:**
+
+![Electrical visor damage overlay after correction, covering the 16:9 viewport](images/custom-qol/electrical-visor-after-16-9.png)
+
+The screenshots capture different moments of the animated effect; they illustrate its screen coverage rather than identical particle positions.
+
 ## Restored screen brightness
 
 The original **Screen Brightness** option now affects the final rendered image. The native menu slider uses a continuous 0–100 range instead of the original coarse integer steps, with smooth dragging and the game's characteristic click feedback. The F1 Screen brightness control and the original menu operate the same setting; 50% is neutral. This is a functional restoration as well as a smoother control.

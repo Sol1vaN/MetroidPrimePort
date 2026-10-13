@@ -48,6 +48,9 @@
 #include <math.h>
 
 #include "port_debug.h"
+#include "port_map_controls.h"
+#include "port_map_math.h"
+#include "port_map_legend.h"
 #include "port_map_icons.h"
 
 static const char* const skFRME_MapScreen = "FRME_MapScreen";
@@ -574,6 +577,8 @@ void CAutoMapper::UpdateHintNavigation(float dt, const CStateManager& mgr) {
 }
 
 void CAutoMapper::ProcessControllerInput(const CFinalInput& input, const CStateManager& mgr) {
+  PortDebug::SetMapScreenOpen(IsInPlayerControlState() && !IsRenderStateInterpolating() &&
+      x1e0_hintSteps.size() == 0 && !x32c_loadingDummyWorld && x328_ == 0);
   if (!IsRenderStateInterpolating()) {
     if (IsInPlayerControlState()) {
       if (x32c_loadingDummyWorld) {
@@ -648,36 +653,8 @@ void CAutoMapper::ProcessControllerInput(const CFinalInput& input, const CStateM
     } else {
       x2fc_textpane_hint->TextSupport().SetText(rstl::wstring_l(L""));
 
-      const wchar_t imagePrefix[] = L"&image=";
-      const wchar_t imageSuffix[] = L";";
-      CStringTable* strTable = gpStringTable;
-
-      rstl::wstring string;
-      string.reserve(0x100);
-      string.append(imagePrefix, -1);
-      string.append(CStringExtras::ConvertToUNICODE(rstl::string(
-          CBasics::Stringize("SI,0.6,1.0,%8.8X", gpTweakPlayerRes->x20_lStick[x2e4_lStickPos]))));
-      string.append(imageSuffix, -1);
-      string.append(strTable->GetString(0x2e), -1);
-      x300_textpane_instructions->TextSupport().SetText(string);
-
-      string.assign(imagePrefix, -1);
-      string.append(CStringExtras::ConvertToUNICODE(rstl::string(
-          CBasics::Stringize("SI,0.6,1.0,%8.8X", gpTweakPlayerRes->x48_cStick[x2e8_rStickPos]))));
-      string.append(imageSuffix, -1);
-      string.append(strTable->GetString(0x2f), -1);
-      x304_textpane_instructions1->TextSupport().SetText(string);
-
-      string.assign(imagePrefix, -1);
-      string.append(CStringExtras::ConvertToUNICODE(rstl::string(
-          CBasics::Stringize("%8.8X", gpTweakPlayerRes->x70_lTrigger[x2ec_lTriggerPos]))));
-      string.append(imageSuffix, -1);
-      string.append(strTable->GetString(0x30), -1);
-      string.append(imagePrefix, -1);
-      string.append(CStringExtras::ConvertToUNICODE(rstl::string(
-          CBasics::Stringize("%8.8X", gpTweakPlayerRes->x7c_rTrigger[x2f0_rTriggerPos]))));
-      string.append(imageSuffix, -1);
-      x308_textpane_instructions2->TextSupport().SetText(string);
+      PortMapLegend::Update(*x2c_frmeInitialized, PortDebug::MouseAim(),
+          x1bc_state == kAMS_MapScreenUniverse || HasCurrentMapUniverseWorld(mgr));
     }
   }
 
@@ -703,7 +680,7 @@ void CAutoMapper::ProcessControllerInput(const CFinalInput& input, const CStateM
     }
   }
 
-  if ((input.PZ() || input.PB()) && x328_ == 0) {
+  if (PortMapMath::Exit(PortDebug::MouseAim(), input.PZ(), input.PB()) && x328_ == 0) {
     if (CanLeaveMapScreenInternal(mgr)) {
       LeaveMapScreen(mgr);
     } else if (NotHintNavigating(mgr)) {
@@ -744,9 +721,7 @@ void CAutoMapper::ProcessMapScreenInput(const CFinalInput& input, const CStateMa
     x2f4_aButtonPos = 1;
   }
 
-  // Port: whether a touch drag can pan the map; the overlay reads it.
-  PortDebug::SetMapScreenOpen(IsInPlayerControlState() && (x1bc_state == kAMS_MapScreen ||
-                                                           x1bc_state == kAMS_MapScreenUniverse));
+  // ProcessControllerInput owns map input lifetime, including transitions.
 
   if (IsInPlayerControlState()) {
     x2e4_lStickPos = 0;
@@ -760,84 +735,28 @@ void CAutoMapper::ProcessMapScreenInput(const CFinalInput& input, const CStateMa
 }
 
 void CAutoMapper::ProcessMapRotateInput(const CFinalInput& input, const CStateManager& mgr) {
-  float up = ControlMapper::GetAnalogInput(ControlMapper::kC_MapCircleUp, input);
-  float down = ControlMapper::GetAnalogInput(ControlMapper::kC_MapCircleDown, input);
-  float left = ControlMapper::GetAnalogInput(ControlMapper::kC_MapCircleLeft, input);
-  float right = ControlMapper::GetAnalogInput(ControlMapper::kC_MapCircleRight, input);
-
-  int flags = 0;
-  if (up > 0.f)
-    flags += 2;
-  if (down > 0.f)
-    flags += 1;
-  if (left > 0.f)
-    flags += 4;
-  if (right > 0.f)
-    flags += 8;
-
-  switch (flags) {
-  case 1:
-    x2e4_lStickPos = 1;
-    break;
-  case 2:
-    x2e4_lStickPos = 5;
-    break;
-  case 4:
-    x2e4_lStickPos = 3;
-    break;
-  case 5:
-    x2e4_lStickPos = 2;
-    break;
-  case 6:
-    x2e4_lStickPos = 4;
-    break;
-  case 8:
-    x2e4_lStickPos = 7;
-    break;
-  case 9:
-    x2e4_lStickPos = 8;
-    break;
-  case 10:
-    x2e4_lStickPos = 6;
-    break;
-  default:
-    break;
+  const bool mouse = PortDebug::MouseAim();
+  float up = mouse ? 0.f : input.ALAUp();
+  float down = mouse ? 0.f : input.ALADown();
+  float left = mouse ? 0.f : input.ALALeft();
+  float right = mouse ? 0.f : input.ALARight();
+  float yaw = 0.f, pitch = 0.f;
+  if (mouse) PortMapControls::TakeMotion(input.Time(), yaw, pitch);
+  if(mouse && (yaw!=0.f || pitch!=0.f || x1d0_rotatingSfx)) {
+    // Keep a silent voice between teeth so fractional travel survives slow input.
+    // LeaveMapScreenState stops it. No movement means no new audible tooth.
+    SetShouldRotatingSoundBePlaying(true);
+    CSfxManager::StepTravel(x1d0_rotatingSfx,
+        PortMapControls::RotationTravel(yaw,pitch,input.Time()),input.Time());
+    CSfxManager::SfxVolume(x1d0_rotatingSfx,127);
   }
-
-  float maxMag = up;
-  int dirSlot = 0;
-  if (down > up) {
-    maxMag = down;
-    dirSlot = 1;
-  }
-  if (left > maxMag) {
-    maxMag = left;
-    dirSlot = 2;
-  }
-  if (right > maxMag) {
-    maxMag = right;
-    dirSlot = 3;
-  }
-
-  left = 0.f;
-  right = 0.f;
-  down = 0.f;
-  up = 0.f;
-  switch (dirSlot) {
-  case 0:
-    up = maxMag;
-    break;
-  case 1:
-    down = maxMag;
-    break;
-  case 2:
-    left = maxMag;
-    break;
-  case 3:
-    right = maxMag;
-    break;
-  default:
-    break;
+  // Convert mouse angular displacement to the native rotation command units.
+  const float degrees = 60.f * input.Time() * gpTweakAutoMapper->x74_rotateDegPerFrame;
+  if (degrees > 0.f) {
+    right += std::max(0.f, yaw * 180.f / M_PIF / degrees);
+    left += std::max(0.f, -yaw * 180.f / M_PIF / degrees);
+    down += std::max(0.f, pitch * 180.f / M_PIF / degrees);
+    up += std::max(0.f, -pitch * 180.f / M_PIF / degrees);
   }
 
   const float twist = PortDebug::TakeMapRotate();
@@ -851,7 +770,10 @@ void CAutoMapper::ProcessMapRotateInput(const CFinalInput& input, const CStateMa
 
   if (up > 0.f || down > 0.f || left > 0.f || right > 0.f) {
     float deltaFrames = 60.f * input.Time();
-    SetShouldRotatingSoundBePlaying(true);
+    if(!mouse) {
+      SetShouldRotatingSoundBePlaying(true);
+      CSfxManager::StepTravel(x1d0_rotatingSfx,-1.f,0.f);
+    }
     float minCamRotateX = gpTweakAutoMapper->x14_minCamRotateX;
     float maxCamRotateX = gpTweakAutoMapper->x18_maxCamRotateX;
     CEulerAngles eulers = CEulerAngles::FromQuaternion(xa8_renderState0.x8_camOrientation);
@@ -875,13 +797,13 @@ void CAutoMapper::ProcessMapRotateInput(const CFinalInput& input, const CStateMa
     xa8_renderState0.x8_camOrientation = CQuaternion::YXZRotation(
         CRelAngle(0.f), CRelAngle(angX.AsRadians()), CRelAngle(angZ.AsRadians()));
   } else {
-    SetShouldRotatingSoundBePlaying(false);
+    if(!mouse)SetShouldRotatingSoundBePlaying(false);
   }
 }
 
 void CAutoMapper::ProcessMapZoomInput(const CFinalInput& input, const CStateManager& mgr) {
-  bool zoomIn = ControlMapper::GetDigitalInput(ControlMapper::kC_MapZoomIn, input);
-  bool zoomOut = ControlMapper::GetDigitalInput(ControlMapper::kC_MapZoomOut, input);
+  const float zoomIn = PortDebug::MouseAim() ? 0.f : input.ARTrigger();
+  const float zoomOut = PortDebug::MouseAim() ? 0.f : input.ALTrigger();
 
   int curState = x324_zoomState;
   int nextZoomState = 0;
@@ -917,34 +839,40 @@ void CAutoMapper::ProcessMapZoomInput(const CFinalInput& input, const CStateMana
 
   if (x324_zoomState == kZS_In) {
     xa8_renderState0.x18_camDist =
-        GetClampedMapScreenCameraDistance(xa8_renderState0.x18_camDist - delta);
+        GetClampedMapScreenCameraDistance(xa8_renderState0.x18_camDist - delta * zoomIn);
     x2f0_rTriggerPos = 1;
     x324_zoomState = kZS_In;
   } else if (x324_zoomState == kZS_Out) {
     xa8_renderState0.x18_camDist =
-        GetClampedMapScreenCameraDistance(xa8_renderState0.x18_camDist + delta);
+        GetClampedMapScreenCameraDistance(xa8_renderState0.x18_camDist + delta * zoomOut);
     x2ec_lTriggerPos = 1;
     x324_zoomState = kZS_Out;
   }
 
   // Port: a pinch scales the camera distance by the inverse of the finger spread.
-  const float pinch = PortDebug::TakeMapZoom();
+  const float touchPinch = PortDebug::TakeMapZoom();
+  const float pinch = touchPinch *
+      (PortDebug::MouseAim() ? PortMapControls::TakeZoom(input.Time()) : 1.f);
   if (pinch != 1.f) {
     xa8_renderState0.x18_camDist =
         GetClampedMapScreenCameraDistance(xa8_renderState0.x18_camDist / pinch);
   }
 
-  if (oldDist == xa8_renderState0.x18_camDist)
+  if (PortDebug::MouseAim() && touchPinch == 1.f)
+    SetShouldZoomingSoundBePlaying(PortMapControls::ZoomSound(oldDist, xa8_renderState0.x18_camDist, input.Time()));
+  else if (oldDist == xa8_renderState0.x18_camDist)
     SetShouldZoomingSoundBePlaying(false);
   else
     SetShouldZoomingSoundBePlaying(true);
 }
 
 void CAutoMapper::ProcessMapPanInput(const CFinalInput& input, const CStateManager& mgr) {
-  float forward = ControlMapper::GetAnalogInput(ControlMapper::kC_MapMoveForward, input);
-  float back = ControlMapper::GetAnalogInput(ControlMapper::kC_MapMoveBack, input);
-  float left = ControlMapper::GetAnalogInput(ControlMapper::kC_MapMoveLeft, input);
-  float right = ControlMapper::GetAnalogInput(ControlMapper::kC_MapMoveRight, input);
+  const auto pan = PortMapMath::Move(PortDebug::MouseAim(),
+      input.ALARight() - input.ALALeft(), input.ALAUp() - input.ALADown(),
+      input.ARARight() - input.ARALeft(), input.ARAUp() - input.ARADown(),
+      PortDebug::InvertMapAxis());
+  float forward = std::max(-pan.z, 0.f), back = std::max(pan.z, 0.f);
+  float left = std::max(pan.x, 0.f), right = std::max(-pan.x, 0.f);
 
   CMatrix3f camRot = xa8_renderState0.x8_camOrientation.BuildTransform();
 
@@ -1006,7 +934,7 @@ void CAutoMapper::ProcessMapPanInput(const CFinalInput& input, const CStateManag
       break;
     }
 
-    CVector3f dirVec = speed * (deltaFrames * CVector3f(right - left, 0.f, forward - back));
+    CVector3f dirVec = speed * (deltaFrames * CVector3f(left - right, 0.f, back - forward));
     CVector3f newPoint = xa8_renderState0.x20_areaPoint + camRot * (dirVec + touchPan);
     if ((newPoint - xa8_renderState0.x20_areaPoint).Magnitude() > input.Time()) {
       SetShouldPanningSoundBePlaying(true);
@@ -1450,6 +1378,7 @@ void CAutoMapper::Update(float dt, const CStateManager& mgr) {
       x30c_basewidget_leftPane = x2c_frmeInitialized->FindWidget("basewidget_leftPane");
       x310_basewidget_yButtonPane = x2c_frmeInitialized->FindWidget("basewidget_yButtonPane");
       x314_basewidget_bottomPane = x2c_frmeInitialized->FindWidget("basewidget_bottomPane");
+      PortMapLegend::Initialize(*x2c_frmeInitialized);
 
       x2f8_textpane_areaname =
           static_cast< CGuiTextPane* >(x2c_frmeInitialized->FindWidget("textpane_areaname"));
@@ -1460,26 +1389,6 @@ void CAutoMapper::Update(float dt, const CStateManager& mgr) {
   // Update frame and text panes
   if (x2c_frmeInitialized != NULL) {
     x2c_frmeInitialized->Update(dt);
-
-    {
-      CGuiTextPane* right1 =
-          static_cast< CGuiTextPane* >(x2c_frmeInitialized->FindWidget("textpane_right1"));
-      const wchar_t imagePrefix[] = L"&image=";
-      const wchar_t imageSuffix[] = L";";
-      rstl::wstring string;
-
-      if (x1bc_state == kAMS_MapScreenUniverse ||
-          (x1bc_state == kAMS_MapScreen && HasCurrentMapUniverseWorld(mgr))) {
-        string.reserve(0x100);
-        string.append(imagePrefix, -1);
-        string.append(CStringExtras::ConvertToUNICODE(rstl::string(
-            CBasics::Stringize("%8.8X", gpTweakPlayerRes->x94_aButton[x2f4_aButtonPos]))));
-        string.append(imageSuffix, -1);
-      } else {
-        string = rstl::wstring_l(L"");
-      }
-      right1->TextSupport().SetText(string);
-    }
 
     CGuiTextPane* right =
         static_cast< CGuiTextPane* >(x2c_frmeInitialized->FindWidget("textpane_right"));
@@ -1492,6 +1401,13 @@ void CAutoMapper::Update(float dt, const CStateManager& mgr) {
       rightString = rstl::wstring_l(L"");
     }
     right->TextSupport().SetText(rightString);
+    PortMapLegend::Update(*x2c_frmeInitialized, PortDebug::MouseAim(),
+        x1bc_state == kAMS_MapScreenUniverse || HasCurrentMapUniverseWorld(mgr));
+    if (x78_areaHintDesc.valid()) {
+      x300_textpane_instructions->TextSupport().SetText(rstl::wstring_l(L""));
+      x304_textpane_instructions1->TextSupport().SetText(rstl::wstring_l(L""));
+      x308_textpane_instructions2->TextSupport().SetText(rstl::wstring_l(L""));
+    }
   }
 
   // Update pane positions
@@ -1674,6 +1590,7 @@ void CAutoMapper::Update(float dt, const CStateManager& mgr) {
 }
 
 void CAutoMapper::BeginMapperStateTransition(EAutoMapperState state, const CStateManager& mgr) {
+  PortDebug::SetMapScreenOpen(false);
   if (state == x1c0_nextState)
     return;
 
@@ -1889,7 +1806,8 @@ void CAutoMapper::SetShouldZoomingSoundBePlaying(bool shouldBePlaying) {
 void CAutoMapper::SetShouldRotatingSoundBePlaying(bool shouldBePlaying) {
   if (shouldBePlaying) {
     if (!x1d0_rotatingSfx)
-      x1d0_rotatingSfx = CSfxManager::SfxStart(0x55F, 127, 64, false, CSfxManager::kMedPriority,
+      // Use the same native click pattern as map zoom.
+      x1d0_rotatingSfx = CSfxManager::SfxStart(0x560, 127, 64, false, CSfxManager::kMedPriority,
                                                true, CSfxManager::kAllAreas);
   } else {
     CSfxManager::SfxStop(x1d0_rotatingSfx);

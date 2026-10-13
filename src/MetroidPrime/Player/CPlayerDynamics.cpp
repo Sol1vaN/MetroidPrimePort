@@ -1,6 +1,8 @@
 #include "MetroidPrime/Player/CPlayer.hpp"
 #include "port_debug.h"
 #include "port_mouse.h"
+#include "port_movement_bob.h"
+#include <dolphin/pad.h>
 
 #include "MetroidPrime/Player/CGameState.hpp"
 #include "MetroidPrime/Cameras/CCameraManager.hpp"
@@ -354,6 +356,7 @@ void CPlayer::ComputeDash(const CFinalInput& input, float dt, CStateManager& mgr
 }
 
 void CPlayer::ComputeMovement(const CFinalInput& input, CStateManager& mgr, float dt) {
+  if (x258_movementState == NPlayer::kMS_OnGround) mWalkGroundSurface = GetSurfaceRestraint();
   const float jumpInput = JumpInput(input, mgr);
   const bool mouseMovement = MouseControlsAllowed(mgr) && x304_orbitState == kOS_NoOrbit;
 #ifdef TARGET_PC
@@ -455,7 +458,7 @@ void CPlayer::ComputeMovement(const CFinalInput& input, CStateManager& mgr, floa
     const float mass = GetMass();
     const float acceleration =
         gpTweakPlayer->GetMaxTranslationalAcceleration(GetSurfaceRestraint());
-    float frictionSpeed = friction * mass / (dt * acceleration);
+    float frictionSpeed = friction * 60.f * mass / acceleration;
     frictionSpeed *= maxSpeed;
 #ifdef TARGET_PC
     PortMouse::ForceLaw law{frictionSpeed, 0.f, 1.f};
@@ -535,6 +538,24 @@ void CPlayer::ComputeMovement(const CFinalInput& input, CStateManager& mgr, floa
       }
     }
 #endif
+  }
+  // Walk/Run changes the target ground speed, including tiny stick deflections.
+  // Use the same horizontal speed reference on the ground and in the air.
+  // Jump height, gravity, dash and grapple remain native. The ramp is computed
+  // once per input tick; the takeoff surface survives the switch to Air.
+  const float walkScale = PADGetKeyboardWalkScale(0);
+  if (walkScale < .9999f && x304_orbitState == kOS_NoOrbit &&
+      x3b8_grappleState == kGS_None && !x37c_sidewaysDashing && !sFastMorphAirCarry) {
+    const CVector3f localVelocity = GetTransform().TransposeRotate(GetVelocityWR());
+    const auto runInput = PortMouse::KeyboardRunInput({strafeInput,forwardInput},
+                                                       gpTweakPlayer->GetLeftAnalogMax());
+    const auto force=PortMouse::KeyboardGroundForce(runInput,
+        {localVelocity.GetX(),localVelocity.GetY()},walkScale,
+        gpTweakPlayer->GetPlayerTranslationMaxSpeed(mWalkGroundSurface),
+        gpTweakPlayer->GetPlayerTranslationFriction(mWalkGroundSurface),GetMass(),dt,
+        gpTweakPlayer->GetMaxTranslationalAcceleration(mWalkGroundSurface));
+    forwardForce=force.forward;
+    if(mouseMovement) strafeForce=force.right;
   }
   if (x304_orbitState != kOS_NoOrbit && gkFreeLookPreventsOrbitMovement && x3dd_lookButtonHeld) {
     forwardForce = 0.f;
@@ -1024,10 +1045,10 @@ float CPlayer::GetBallMaxVelocity() const {
 
 float CPlayer::GetActualFirstPersonMaxVelocity(float dt) const {
   const float friction = gpTweakPlayer->GetPlayerTranslationFriction(GetSurfaceRestraint());
-  const float frictionForce = friction * GetMass();
   const float maxSpeed = gpTweakPlayer->GetPlayerTranslationMaxSpeed(GetSurfaceRestraint());
   const float acceleration = gpTweakPlayer->GetMaxTranslationalAcceleration(GetSurfaceRestraint());
-  return -(frictionForce * maxSpeed / (acceleration * dt) - maxSpeed - friction);
+  return PortMouse::GroundRunVelocity({0.f, 1.f}, maxSpeed, friction, GetMass(), dt,
+                                       acceleration).forward;
 }
 
 float CPlayer::GetActualBallMaxVelocity(float dt) const {
@@ -1419,8 +1440,11 @@ float CPlayer::UpdateCameraBob(float dt, CStateManager& mgr) {
   if (x304_orbitState == kOS_NoOrbit) {
     const float forwardSpeed = CVector3f::Dot(velocity, GetTransform().GetForward());
     state = CPlayerCameraBob::kCBS_Walk;
-    magnitude = CMath::AbsF(forwardSpeed / GetActualFirstPersonMaxVelocity(dt));
-    if (magnitude < 0.01f) {
+    const float rightSpeed = CVector3f::Dot(velocity, GetTransform().GetRight());
+    magnitude = PortMovementBob::SpeedFraction(
+        rightSpeed, forwardSpeed,
+        gpTweakPlayer->GetPlayerTranslationMaxSpeed(GetSurfaceRestraint()));
+    if (magnitude == 0.f) {
       state = CPlayerCameraBob::kCBS_WalkNoBob;
       magnitude = 0.f;
     }
@@ -1475,9 +1499,9 @@ float CPlayer::UpdateCameraBob(float dt, CStateManager& mgr) {
   x76c_cameraBob->SetPlayerVelocity(velocity);
   x76c_cameraBob->SetState(state, mgr);
   x76c_cameraBob->SetBobMagnitude(magnitude);
-  const float timeScaleRange = 1.f - CPlayerCameraBob::GetSlowSpeedPeriodScale();
-  x76c_cameraBob->SetBobTimeScale(timeScaleRange * magnitude +
-                                  CPlayerCameraBob::GetSlowSpeedPeriodScale());
+  // Slow strides lose both amplitude and cadence; there is no fixed
+  // minimum rhythm at near-zero walking speed. Keep the native bob shape.
+  x76c_cameraBob->SetBobTimeScale(PortMovementBob::Cadence(magnitude));
   x76c_cameraBob->Update(dt, mgr);
   return magnitude;
 }

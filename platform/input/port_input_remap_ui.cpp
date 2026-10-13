@@ -901,7 +901,7 @@ const std::vector<SGroup>& Groups() {
          true},
         // The C-stick is the right stick: twin-stick aim, classic beam picks, map panning.
         {"Move and aim",
-         {Action::MainUp, Action::MainDown, Action::MainLeft, Action::MainRight, Action::CUp, Action::CDown,
+         {Action::Walk, Action::MainUp, Action::MainDown, Action::MainLeft, Action::MainRight, Action::CUp, Action::CDown,
           Action::CLeft, Action::CRight},
          true},
         // Direct picks work in every scheme; the GameCube inputs behind them are listed above.
@@ -920,8 +920,7 @@ const std::vector<SGroup>& Groups() {
           Action::MenuLAnalog, Action::MenuRAnalog, Action::MenuUp, Action::MenuDown, Action::MenuLeft,
           Action::MenuRight},
          true},
-        {"Port", {Action::PortMenu, Action::SaveState, Action::LoadState, Action::Screenshot, Action::ToggleOriginal,
-          Action::PhotoMode}, true},
+        {"Port", {Action::FrameLimit, Action::PortMenu, Action::SaveState, Action::LoadState, Action::Screenshot, Action::ToggleOriginal, Action::PhotoMode}, true},
         {"Layers (shift keys, advanced)", {Action::Layer1, Action::Layer2, Action::Layer3, Action::Layer4}, false},
     };
     // An action added to the engine but not sorted here still gets a row.
@@ -1091,7 +1090,7 @@ void DrawTable(const SViews& views, bool editorDrawn) {
     };
     for (const Action action : group.actions) {
       if (!tableOpen) break;
-      const std::string label(PortInput::Info(action).label);
+      const std::string label = action == Action::Walk ? (PortDebug::AlwaysRun() ? "Walk" : "Run") : std::string(PortInput::Info(action).label);
       const char* hint = GameHint(action);
       if (!Contains(label, sFilter) && (hint == nullptr || !Contains(hint, sFilter))) continue;
       SCell cells[3];

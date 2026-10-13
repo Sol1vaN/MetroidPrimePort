@@ -134,6 +134,23 @@ static void SetTextPanePair(CGuiFrame* frame, const char* name, const wchar_t* t
   shadow->TextSupport().SetText(rstl::wstring(text));
 }
 
+static float SliderOptionValue(EGameOption option) {
+#ifdef TARGET_PC
+  if (option == kGO_ScreenBrightness) return PortDebug::ScreenBrightness();
+#endif
+  return CGameOptions::GetOption(option);
+}
+static void SetSliderOption(EGameOption option, float value) {
+#ifdef TARGET_PC
+  if (option == kGO_ScreenBrightness) {
+    PortDebug::SetScreenBrightness(value);
+    CGameOptions::SetOption(option, static_cast<int>(value * 0.08f + 0.5f));
+    return;
+  }
+#endif
+  CGameOptions::SetOption(option, value);
+}
+
 enum EOptionType { kOT_Float, kOT_DoubleEnum, kOT_TripleEnum, kOT_RestoreDefaults };
 struct SGameOption {
   EGameOption option;
@@ -152,7 +169,11 @@ static const SGameOption skVisorOptions[] = {
     {kGO_RestoreDefaults, 35, 0.f, 1.f, 1.f, kOT_RestoreDefaults},
 };
 static const SGameOption skDisplayOptions[] = {
+#ifdef TARGET_PC
+    {kGO_ScreenBrightness, 25, 0.f, 100.f, 0.1f, kOT_Float},
+#else
     {kGO_ScreenBrightness, 25, 0.f, 8.f, 1.f, kOT_Float},
+#endif
     {kGO_ScreenOffsetX, 26, -30.f, 30.f, 1.f, kOT_Float},
     {kGO_ScreenOffsetY, 27, -30.f, 30.f, 1.f, kOT_Float},
     {kGO_ScreenStretch, 28, -10.f, 10.f, 1.f, kOT_Float},
@@ -236,7 +257,7 @@ static const SGameOption skPortVisorOptions[] = {
     {kGO_RestoreDefaults, 35, 0.f, 1.f, 1.f, kOT_RestoreDefaults},
 };
 static const SGameOption skPortDisplayOptions[] = {
-    {kGO_ScreenBrightness, 25, 0.f, 8.f, 1.f, kOT_Float},
+    {kGO_ScreenBrightness, 25, 0.f, 100.f, 0.1f, kOT_Float},
     {kGO_ScreenOffsetX, 26, -30.f, 30.f, 1.f, kOT_Float},
     {kGO_ScreenOffsetY, 27, -30.f, 30.f, 1.f, kOT_Float},
     {kGO_ScreenStretch, 28, -10.f, 10.f, 1.f, kOT_Float},
@@ -624,6 +645,9 @@ void CGameOptions::TryRestoreDefaults(const CFinalInput& input, int category, in
       break;
     case 1:
       options.SetScreenBrightness(4, true);
+#ifdef TARGET_PC
+      PortDebug::SetScreenBrightness(50.f);
+#endif
       options.SetScreenPositionX(0, true);
       options.SetScreenPositionY(0, true);
       options.SetScreenStretch(0, true);
@@ -935,7 +959,10 @@ void COptionsScreen::UpdateOptionView() {
     x18c_slidergroup_slider->SetMinVal(opt.minVal);
     x18c_slidergroup_slider->SetMaxVal(opt.maxVal);
     x18c_slidergroup_slider->SetIncrement(opt.increment);
-    x18c_slidergroup_slider->SetCurVal(CGameOptions::GetOption(opt.option));
+    x18c_slidergroup_slider->SetCurVal(SliderOptionValue(opt.option));
+#ifdef TARGET_PC
+    x18c_slidergroup_slider->SetContinuous(opt.option == kGO_ScreenBrightness);
+#endif
     x18c_slidergroup_slider->SetLocalPosition(x3c_sliderStart + CVector3f(0.f, 0.f, zOff));
     break;
   case kOT_DoubleEnum:
@@ -980,7 +1007,7 @@ void COptionsScreen::OnSliderChanged(CGuiSliderGroup* caller, float value) {
     const SOptionCategory& category =
         GetOptionCategory(x70_tablegroup_leftlog->GetUserSelection(), false);
     const EGameOption option = category.options[x1c_rightSel].option;
-    CGameOptions::SetOption(option, caller->GetCurVal());
+    SetSliderOption(option, caller->GetCurVal());
   }
 }
 
@@ -1143,7 +1170,10 @@ void SOptionsFrontEndFrame::HandleRightSelectionChange() {
     x34_slidergroup_slider->SetMinVal(option.minVal);
     x34_slidergroup_slider->SetMaxVal(option.maxVal);
     x34_slidergroup_slider->SetIncrement(option.increment);
-    x34_slidergroup_slider->SetCurVal(CGameOptions::GetOption(option.option));
+    x34_slidergroup_slider->SetCurVal(SliderOptionValue(option.option));
+#ifdef TARGET_PC
+    x34_slidergroup_slider->SetContinuous(option.option == kGO_ScreenBrightness);
+#endif
     x34_slidergroup_slider->SetO2PTransform(
         CTransform4f::Translate(0.f, 0.f,
                                 x28_tablegroup_rightmenu->GetUserSelection() * x38_rowPitch) *
@@ -1290,6 +1320,6 @@ void SOptionsFrontEndFrame::DoSliderChange(CGuiSliderGroup* caller, float value)
     const SOptionCategory& category = skGameOptions[x24_tablegroup_leftmenu->GetUserSelection()];
     const EGameOption option =
         category.options[x28_tablegroup_rightmenu->GetUserSelection()].option;
-    CGameOptions::SetOption(option, caller->GetCurVal());
+    SetSliderOption(option, caller->GetCurVal());
   }
 }

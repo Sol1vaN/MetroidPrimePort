@@ -120,6 +120,8 @@ enum class ActionKind : uint8_t {
   X(PadDown, Digital, "dpad_down", "D-pad down")                                                   \
   X(PadLeft, Digital, "dpad_left", "D-pad left")                                                   \
   X(PadRight, Digital, "dpad_right", "D-pad right")                                                \
+  X(Walk, Digital, "walk", "Walk / Run")                                                           \
+  X(FrameLimit, Digital, "frame_limit", "Frame limit")                                             \
   X(MainUp, HalfAxis, "stick_up", "Control stick up")                                              \
   X(MainDown, HalfAxis, "stick_down", "Control stick down")                                        \
   X(MainLeft, HalfAxis, "stick_left", "Control stick left")                                        \
@@ -226,6 +228,8 @@ struct Profile {
 
 struct Output {
   std::array<float, kActionCount> value{};
+  // Keep movement sources separate so walking never scales a physical stick.
+  std::array<float, kActionCount> keyboardValue{}, otherValue{};
   std::bitset<kActionCount> held, pressed, released;
 
   float Value(Action a) const { return value[size_t(a)]; }

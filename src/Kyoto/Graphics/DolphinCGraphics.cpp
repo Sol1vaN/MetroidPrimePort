@@ -4,6 +4,7 @@
 #include <aurora/aurora.h>
 
 #include "port_debug.h"
+#include "port_display_controls.h"
 
 #include <atomic>
 #ifdef __ANDROID__
@@ -858,6 +859,7 @@ void CGraphics::EndScene() {
   ++mNumBreakpointsWaiting;
   void*& frameBuf = mpCurrenFrameBuf;
   float brightness = CMath::Clamp(0.f, mBrightness, 2.f);
+  aurora_set_display_brightness(PortDisplayControls::BrightnessGain(PortDebug::ScreenBrightness()));
   static const u8 copyFilter[7] = {0x00, 0x00, 0x15, 0x16, 0x15, 0x00, 0x00};
   const u8* inFilter = mUseVideoFilter ? mRenderModeObj.vfilter : copyFilter;
   u8 vfilter[7];

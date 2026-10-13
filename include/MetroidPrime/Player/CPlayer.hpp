@@ -557,6 +557,7 @@ private:
   bool x2a4_cancelCameraPitch;
   float x2a8_timeSinceJump;
   ESurfaceRestraints x2ac_surfaceRestraint;
+  ESurfaceRestraints mWalkGroundSurface = kSR_Normal;
   int x2b0_outOfWaterTicks;
   rstl::reserved_vector< float, 6 > x2b4_accelerationTable;
   int x2d0_curAcceleration;

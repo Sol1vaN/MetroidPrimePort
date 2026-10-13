@@ -153,6 +153,7 @@ struct KeyIcon {
   const char* stem;
 };
 constexpr KeyIcon kKeyIcons[] = {
+    {SDL_SCANCODE_MENU, "keyboard_menu"}, {SDL_SCANCODE_APPLICATION, "keyboard_menu"},
     {SDL_SCANCODE_A, "keyboard_a"}, {SDL_SCANCODE_B, "keyboard_b"},
     {SDL_SCANCODE_C, "keyboard_c"}, {SDL_SCANCODE_D, "keyboard_d"},
     {SDL_SCANCODE_E, "keyboard_e"}, {SDL_SCANCODE_F, "keyboard_f"},
@@ -210,6 +211,7 @@ constexpr KeyIcon kKeyIcons[] = {
     {SDL_SCANCODE_NUMLOCKCLEAR, "keyboard_numlock"},
     {PAD_KEY_MOUSE_LEFT, "mouse_left"}, {PAD_KEY_MOUSE_RIGHT, "mouse_right"},
     {PAD_KEY_MOUSE_MIDDLE, "mouse_scroll"},
+    {PAD_KEY_MOUSE_WHEEL_UP, "mouse_scroll"}, {PAD_KEY_MOUSE_WHEEL_DOWN, "mouse_scroll"},
     {PAD_KEY_MOUSE_X1, "mouse_side_back"}, {PAD_KEY_MOUSE_X2, "mouse_side_forward"},
 };
 
@@ -493,6 +495,9 @@ int ScancodeForInput(const PortInput::Input& in) {
     const int button = in.code % PortInputDevices::kMouseKeySlot;
     return button <= PAD_KEY_MOUSE_LEFT - PAD_KEY_MOUSE_X2 ? PAD_KEY_MOUSE_LEFT - button : PAD_KEY_INVALID;
   }
+  if (in.device == PortInput::Device::MouseWheel && in.code == 0) {
+    return in.dir > 0 ? PAD_KEY_MOUSE_WHEEL_UP : PAD_KEY_MOUSE_WHEEL_DOWN;
+  }
   return PAD_KEY_INVALID;
 }
 
@@ -754,6 +759,13 @@ void Apply(size_t index, const std::string& stem) {
 } // namespace
 
 namespace PortPrompts {
+bool ReadKeyGlyph(int scancode, std::vector<uint8_t>& bytes) {
+  const char* stem=StemForScancode(scancode);
+  if (!stem) return false;
+  const auto path=FindIconFile(std::string(stem)+".dds");
+  return !path.empty() && ReadIconFile(path,bytes);
+}
+
 // "gamecube" has no static set, which is deliberate: the game's own prompt art
 // already is the GameCube set, so only a remapped GC pad button gets an icon
 // (GameCubeStemForButton).

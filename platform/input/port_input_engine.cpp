@@ -416,6 +416,8 @@ void Runtime::ConsumeChangedOnContextSwitch(uint16_t before, uint16_t after) {
 const Output& Runtime::Poll(const RawState& raw, uint16_t contexts, double nowMs) {
   const auto prevHeld = mOut.held;
   mOut.value.fill(0.f);
+  mOut.keyboardValue.fill(0.f);
+  mOut.otherValue.fill(0.f);
   mOut.held.reset();
   if (mProfile == nullptr) {
     mOut.pressed.reset();
@@ -451,6 +453,12 @@ const Output& Runtime::Poll(const RawState& raw, uint16_t contexts, double nowMs
   auto apply = [&](int bi, float v) {
     const Binding& b = bindings[bi];
     const auto a = size_t(b.action);
+    const Device source = b.inputs[b.count - 1].device;
+    const bool keyboard = source == Device::Key || source == Device::MouseButton ||
+                          source == Device::MouseWheel || source == Device::MouseMotion;
+    auto& sourceValue = keyboard ? mOut.keyboardValue[a] : mOut.otherValue[a];
+    if (Info(b.action).kind == ActionKind::Delta) sourceValue += v;
+    else if (std::fabs(v) > std::fabs(sourceValue)) sourceValue = v;
     if (Info(b.action).kind == ActionKind::Delta) {
       mOut.value[a] += v;
       if (v != 0.f) {

@@ -1,4 +1,4 @@
-set(revision "source-snapshot")
+set(revision "0.23.0-custom28")
 find_program(GIT_EXECUTABLE git)
 if(GIT_EXECUTABLE)
     execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${SOURCE_DIR}" rev-parse --show-toplevel
@@ -13,6 +13,7 @@ if(GIT_EXECUTABLE)
         endif()
     endif()
 endif()
+set(revision "0.23.0-custom28")
 # The release version is versionName in the Android build file, which every
 # release bumps (docs/RELEASING.md); empty when it can't be read.
 set(version "")

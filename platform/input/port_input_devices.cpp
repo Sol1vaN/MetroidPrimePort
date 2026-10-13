@@ -1,4 +1,6 @@
 #include "port_input_devices.h"
+#include "port_hotkeys.h"
+#include "../../extern/aurora/lib/keyboard_walk.hpp"
 
 #include "port_debug.h"
 #include "port_input_map.h"
@@ -161,6 +163,8 @@ void BindIn(Profile& p, Action action, const Input& in, uint16_t contexts) {
 
 // A key slot's scancode: a key, or a mouse button read the way `mouseBase` says.
 Input KeySlotInput(s32 scancode, int mouseBase) {
+  if (scancode == PAD_KEY_MOUSE_WHEEL_UP) return Make(Device::MouseWheel, 0, 1);
+  if (scancode == PAD_KEY_MOUSE_WHEEL_DOWN) return Make(Device::MouseWheel, 0, -1);
   if (scancode >= 0 && scancode < PortInput::kKeyCount) return Make(Device::Key, scancode);
   if (scancode <= PAD_KEY_MOUSE_LEFT && scancode >= PAD_KEY_MOUSE_X2) {
     return Make(Device::MouseButton, mouseBase + (PAD_KEY_MOUSE_LEFT - scancode));
@@ -393,13 +397,30 @@ void BindPortControls(Profile& p) {
       p.bindings.push_back(b);
     }
   }
-  Bind(p, Action::SaveState, Make(Device::Key, SDL_SCANCODE_F5));
-  Bind(p, Action::LoadState, Make(Device::Key, SDL_SCANCODE_F9));
+  Bind(p, Action::FrameLimit, KeySlotInput(PortDebug::LegacyPortHotkey(0), kMouseKeySlot));
+  Bind(p, Action::SaveState, KeySlotInput(PortDebug::LegacyPortHotkey(1), kMouseKeySlot));
+  Bind(p, Action::LoadState, KeySlotInput(PortDebug::LegacyPortHotkey(2), kMouseKeySlot));
+  for (int slot = 0; slot < 2; ++slot)
+    Bind(p, Action::Walk, KeySlotInput(PortDebug::WalkBinding(slot), kMouseKeySlot));
   Bind(p, Action::Screenshot, Make(Device::Key, SDL_SCANCODE_F12));
-  Bind(p, Action::PhotoMode, Make(Device::Key, SDL_SCANCODE_F8));
+  // Preserve existing save/load/gameplay keys when adding the new photo action.
+  // In custom27 F8 is commonly Load State; prefer the next free key then.
+  const int photoKey = PortHotkeys::DefaultPhotoKey([&](int key) {
+    return std::any_of(p.bindings.begin(), p.bindings.end(), [key](const Binding& b) {
+      for (int i = 0; i < b.count; ++i)
+        if (b.inputs[i].device == Device::Key && b.inputs[i].code == key) return true;
+      return false;
+    });
+  });
+  if (photoKey >= 0) Bind(p, Action::PhotoMode, Make(Device::Key, photoKey));
+
 
   // The wheel cycles beams, as in PrimeHack (issue #61); retail has no wheel.
-  if (!PortDebug::OriginalExperience()) {
+  const bool wheelAssigned = std::any_of(p.bindings.begin(), p.bindings.end(), [](const Binding& b) {
+    for (int i=0; i<b.count; ++i) if (b.inputs[i].device == Device::MouseWheel) return true;
+    return false;
+  });
+  if (!PortDebug::OriginalExperience() && !wheelAssigned) {
     Bind(p, Action::BeamPrev, Make(Device::MouseWheel, 0, 1));
     Bind(p, Action::BeamNext, Make(Device::MouseWheel, 0, -1));
   }
@@ -471,7 +492,8 @@ void FillRawState(PortInput::RawState& raw, unsigned mouseHeld, bool focused) {
   // overlay or an unfocused window is dropped too.
   static bool sWheelWatch = false;
   if (!sWheelWatch) sWheelWatch = SDL_AddEventWatch(WheelWatch, nullptr);
-  const bool wheelLive = focused && !PortDebug::Visible();
+  const bool wheelLive = focused && !PortDebug::Visible() &&
+                         !(PortDebug::MouseAim() && PortDebug::MapScreenOpen());
   for (int i = 0; i < 2; ++i) {
     const int milli = sWheelMilli[i].exchange(0, std::memory_order_relaxed);
     if (!wheelLive) continue;
@@ -614,7 +636,7 @@ void RouteDirectActions(const PortInput::Output& out) {
 // The port's own actions: polled every frame by PollPortActions, not with the game
 // ticks, so they work while the game is paused or the F1 overlay is open.
 bool IsPortAction(Action a) {
-  return a == Action::PortMenu || a == Action::SaveState || a == Action::LoadState || a == Action::Screenshot ||
+  return a == Action::FrameLimit || a == Action::PortMenu || a == Action::SaveState || a == Action::LoadState || a == Action::Screenshot ||
          a == Action::ToggleOriginal || a == Action::PhotoMode;
 }
 
@@ -1071,6 +1093,21 @@ PADStatus Synthesize(const PortInput::Output& out) {
   return s;
 }
 
+static bool sWalkHeld = false;
+bool WalkHeld() { return sWalkHeld; }
+
+int KeyBindingForPad(bool axis, unsigned code) {
+  Input in;
+  const bool found = axis ? PromptAxisInput(static_cast<PADAxis>(code), PortInput::Family::Keyboard, in)
+                          : PromptButtonInput(code, PortInput::Family::Keyboard, in);
+  if (!found) return PAD_KEY_INVALID;
+  if (in.device == Device::Key) return in.code;
+  if (in.device == Device::MouseButton) return PAD_KEY_MOUSE_LEFT - (in.code % kMouseKeySlot);
+  if (in.device == Device::MouseWheel && in.code == 0)
+    return in.dir > 0 ? PAD_KEY_MOUSE_WHEEL_UP : PAD_KEY_MOUSE_WHEEL_DOWN;
+  return PAD_KEY_INVALID;
+}
+
 SPoll Poll(unsigned mouseHeld, bool focused) {
   static Profile sProfile;
   static PortInput::Runtime sRuntime;
@@ -1095,12 +1132,27 @@ SPoll Poll(unsigned mouseHeld, bool focused) {
   if (PortInputRemap::Capturing()) {
     // The F1 Remap page is recording an input: it reaches neither the game nor
     // the direct actions (a bound PortMenu would close the page mid-capture).
+    sWalkHeld = false;
+    PADSetKeyboardOverride(0, 0, 0, 1.f);
     r.status.err = PAD_ERR_NO_CONTROLLER;
     return r;
   }
   RouteDirectActions(out);
 
+  sWalkHeld = out.Held(Action::Walk);
+  const float scale = PortDebug::KeyboardWalkScale(PortDebug::TickPeriod());
+  PortInput::Output keyboard = out, other = out;
+  keyboard.value = out.keyboardValue; other.value = out.otherValue;
+  PADStatus keys = Synthesize(keyboard), pad = Synthesize(other);
+  // Test the native deadzone, not raw nonzero: neutral Y may be -1.
+  const bool diagonal = std::abs(keys.stickX) > 15 && std::abs(keys.stickY) > 15;
+  keys.stickX = aurora::input::KeyboardWalkAxis(keys.stickX, diagonal, scale);
+  keys.stickY = aurora::input::KeyboardWalkAxis(keys.stickY, diagonal, scale);
   r.status = Synthesize(out);
+  auto dominant = [](int key, int physical) { return std::abs(physical)>std::abs(key)?physical:key; };
+  r.status.stickX = dominant(keys.stickX, pad.stickX);
+  r.status.stickY = dominant(keys.stickY, pad.stickY);
+  PADSetKeyboardOverride(0, keys.stickX, keys.stickY, scale);
   return r;
 }
 
@@ -1135,6 +1187,7 @@ void PollPortActions() {
   const PortInput::Output& out = sRuntime.Poll(raw, GameContexts(), static_cast< double >(SDL_GetTicksNS()) / 1e6);
   // The F1 Remap page is recording an input: a bound PortMenu would close it.
   if (PortInputRemap::Capturing()) return;
+  if (out.Pressed(Action::FrameLimit)) PortDebug::SetFrameLimitEnabled(!PortDebug::FrameLimitEnabled());
   if (out.Pressed(Action::PortMenu)) PortDebug::RequestToggle();
   if (out.Pressed(Action::SaveState)) PortDebug::RequestSaveStateHotkey(1);
   if (out.Pressed(Action::LoadState)) PortDebug::RequestSaveStateHotkey(2);

@@ -117,6 +117,7 @@ private:
   CTransform4f xd0_viewWanderXf;
   float x100_wanderMagnitude;
   float x104_targetWanderMagnitude;
+  float mTargetBobTimeScale = 0.f;
 };
 CHECK_SIZEOF(CPlayerCameraBob, 0x108)
 

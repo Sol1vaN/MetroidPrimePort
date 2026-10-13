@@ -2,6 +2,9 @@
 #define _CPLAYERGUN
 
 #include "types.h"
+#ifdef TARGET_PC
+#include "port_weapon_sway.h"
+#endif
 
 #include "MetroidPrime/CActor.hpp"
 #include "MetroidPrime/CActorLights.hpp"
@@ -487,6 +490,12 @@ private:
   rstl::reserved_vector< TLockedToken< CGenDescription >, kPortFlashCount > mPortFlashTokens;
   int mPortFlashToken[kPortFlashCount];
   rstl::auto_ptr< CElementGen > mPortFlashGens[kPortFlashCount];
+#endif
+#ifdef TARGET_PC
+  mutable PortWeaponSway::State mPortWeaponSway;
+  mutable double mPortSwayTime = 0;
+  mutable int mPortSwayFrame = -1;
+  mutable CVector3f mPortSwayEye = CVector3f::Zero();
 #endif
 };
 CHECK_SIZEOF(CPlayerGun, 0x838)

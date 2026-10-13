@@ -211,6 +211,7 @@ public:
   static ushort TranslateSFXID(ushort);
   static void SetActiveAreas(const rstl::reserved_vector< int, 10 >& areas);
 
+  static void StepTravel(CSfxHandle handle,float teeth,float dt);
   static void PitchBend(CSfxHandle handle, int pitch);
   static void SetDuration(CSfxHandle handle, float duration);
   static const short GetReverbAmount();

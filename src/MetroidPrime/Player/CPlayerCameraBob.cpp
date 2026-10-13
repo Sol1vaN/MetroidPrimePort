@@ -1,4 +1,5 @@
 #include "MetroidPrime/Player/CPlayerCameraBob.hpp"
+#include "port_movement_bob.h"
 
 #include "Kyoto/Basics/CCast.hpp"
 #include "Kyoto/Math/CMath.hpp"
@@ -85,7 +86,9 @@ void CPlayerCameraBob::ReadTweaks(CInputStream& in) {
 }
 
 void CPlayerCameraBob::Update(float dt, CStateManager& mgr) {
-  x1c_bobTime += dt * x18_bobTimeScale;
+  PortMovementBob::Advance(x14_bobMagnitude, x18_bobTimeScale, x1c_bobTime,
+                           x10_targetBobMagnitude, mTargetBobTimeScale,
+                           kTargetMagnitudeTrackingRate, dt);
   if (x28_applyLandingTrans) {
     float damping = kLandingBobDamping;
     float spring = kLandingBobSpringConstant;
@@ -129,7 +132,6 @@ void CPlayerCameraBob::Update(float dt, CStateManager& mgr) {
   if (x100_wanderMagnitude < 0.f) {
     x100_wanderMagnitude = 0.f;
   }
-  x14_bobMagnitude += kTargetMagnitudeTrackingRate * (x10_targetBobMagnitude - x14_bobMagnitude);
   UpdateViewWander(dt, mgr);
   x2c_cameraBobTransform =
       CalculateCameraBobTransformation() * GetViewWanderTransform() *
@@ -138,9 +140,7 @@ void CPlayerCameraBob::Update(float dt, CStateManager& mgr) {
 }
 
 void CPlayerCameraBob::SetBobTimeScale(const float scale) {
-  x18_bobTimeScale = scale;
-  x18_bobTimeScale = rstl::max_val(x18_bobTimeScale, 0.f);
-  x18_bobTimeScale = rstl::min_val(x18_bobTimeScale, 1.f);
+  mTargetBobTimeScale = CMath::Clamp(0.f, scale, 1.f);
 }
 
 void CPlayerCameraBob::SetBobMagnitude(const float scale) {

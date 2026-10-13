@@ -30,6 +30,9 @@
 #ifdef TARGET_PC
 #include "port_debug.h"
 #include "port_presentation_rules.h"
+#include "MetroidPrime/Player/CPlayer.hpp"
+#include "MetroidPrime/Player/CMorphBall.hpp"
+#include "MetroidPrime/TCastTo.hpp"
 #include "Kyoto/Math/CQuaternion.hpp"
 #endif
 
@@ -964,6 +967,9 @@ bool CActor::PortRenderScopeActive() { return sPortRenderScopeActive; }
 void CActor::PortSnapshotRenderTransform() {
   xPortPrevTransform = x34_transform;
   xPortPrevGeneration = sPortTickGeneration;
+  if (CPlayer* player = TCastToPtr< CPlayer >(this)) {
+    if (player->MorphBall()) player->MorphBall()->PortSnapshotRenderTransform();
+  }
 }
 
 bool CActor::PortPresentedView(const CTransform4f& view, CTransform4f& out) const {
@@ -971,6 +977,10 @@ bool CActor::PortPresentedView(const CTransform4f& view, CTransform4f& out) cons
   if (t < 0.f || t >= 1.f || xPortPrevGeneration != sPortTickGeneration ||
       xPortOwnPresentation || !PortDebug::ActorInterpolation())
     return false;
+  if (const CPlayer* player = TCastToConstPtr< CPlayer >(this)) {
+    if (player->GetMorphballTransitionState() == CPlayer::kMS_Morphed && player->GetMorphBall())
+      return player->GetMorphBall()->PortPresentedView(view, out);
+  }
   if (xPortPrevTransform == x34_transform)
     return false;
   CTransform4f blend = CTransform4f::Identity();

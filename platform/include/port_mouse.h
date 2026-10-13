@@ -67,6 +67,53 @@ inline float AxisForce(float input, float velocity, float maxSpeed, float fricti
   return (fraction < -1.f ? -1.f : fraction > 1.f ? 1.f : fraction) * acceleration * law.gain;
 }
 
+// Equilibrium of the native force law AFTER the 60 Hz-authored friction
+// pass and integration. Walk must approach this value, not the raw speed cap.
+inline Planar GroundRunVelocity(Planar direction, float maximum, float friction,
+                               float mass, float dt, float acceleration) {
+  const float length = std::hypot(direction.right, direction.forward);
+  if (length <= 0.f || maximum <= 0.f || mass <= 0.f || dt <= 0.f || acceleration <= 0.f)
+    return {0, 0};
+  direction = ClampPlanar(direction, 1.f);
+  const float base = std::fmax(0.f, maximum - friction * 60.f * mass * maximum / acceleration);
+  const auto axis = [&](float input) {
+    // v0.22 preserves the 60 Hz equilibrium at every simulation rate.
+    return input == 0.f ? 0.f : input * base + std::copysign(friction, input);
+  };
+  return ClampPlanar({axis(direction.right), axis(direction.forward)}, maximum);
+}
+// Reconstruct full keyboard deflection before applying the walk fraction.
+// This includes the GC diagonal gate, input divisor, and native forward gain.
+inline Planar KeyboardRunInput(Planar input, float leftDivisor) {
+  if(leftDivisor <= 0.f) return {0,0};
+  const bool diagonal = input.right != 0.f && input.forward != 0.f;
+  const float stick = (diagonal ? 40.f / 72.f : 1.f) / leftDivisor;
+  const float right = input.right == 0.f ? 0.f : std::copysign(std::fmin(stick,1.f),input.right);
+  const float forward = input.forward == 0.f ? 0.f : std::copysign(std::fmin(stick/.8f,1.f),input.forward);
+  return ClampPlanar({right,forward},1.f);
+}
+inline Planar KeyboardGroundForce(Planar input, Planar velocity, float scale,
+                                  float maximum, float friction, float mass,
+                                  float dt, float acceleration) {
+  if (dt <= 0.f || !std::isfinite(scale)) return {0, 0};
+  const auto run = GroundRunVelocity(input, maximum, friction, mass, dt, acceleration);
+  scale = std::fmax(0.f, std::fmin(scale, 1.f));
+  return ClampPlanar({mass * (run.right * scale - velocity.right) / dt,
+                      mass * (run.forward * scale - velocity.forward) / dt}, acceleration);
+}
+
+// Slow keyboard locomotion targets actual velocity after the player's friction
+// pass. The retail force law has a nonzero friction-compensation floor as input
+// approaches zero; retaining that floor prevents very slow walking.
+inline Planar WalkForce(Planar input, Planar dampedVelocity, float speedFraction,
+                        float maxSpeed, float mass, float dt, float acceleration) {
+  if (dt<=0 || mass<=0 || maxSpeed<=0 || acceleration<=0 || !std::isfinite(speedFraction))
+    return {0,0};
+  const auto target=ClampPlanar(input,speedFraction);
+  return ClampPlanar({mass*(target.right*maxSpeed-dampedVelocity.right)/dt,
+                      mass*(target.forward*maxSpeed-dampedVelocity.forward)/dt},acceleration);
+}
+
 struct AimState {
   float yaw = 0.f;
   float pitch = 0.f;

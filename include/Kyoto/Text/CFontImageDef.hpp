@@ -29,9 +29,21 @@ public:
   int GetWidth() const { return GetMonoWidth(); }
   int GetHeight() const { return GetMonoHeight(); }
   int CalculateBaseline() const;
+#ifdef TARGET_PC
+  void PortSetAlignment(int baseline,int offsetX=0,int offsetY=0) {
+    mPortBaseline=baseline;mPortOffsetX=offsetX;mPortOffsetY=offsetY;
+  }
+  int PortOffsetX() const { return mPortOffsetX; }
+  int PortOffsetY() const { return mPortOffsetY; }
+#endif
   int CalculateHeight() const;
 
 private:
+#ifdef TARGET_PC
+  int mPortBaseline=-1;
+  int mPortOffsetX=0;
+  int mPortOffsetY=0;
+#endif
   float mFPS;
   rstl::vector< TToken< CTexture > > mTextures;
   CVector2f mCropFactor;

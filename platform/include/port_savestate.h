@@ -210,7 +210,7 @@ std::string ResumeStatus();
 // The folder states live in (created on first use).
 std::string Folder();
 Info SlotInfo(int slot);
-// The slot F5/F9 use.
+// The slot used by the configurable save/load hotkeys.
 int SelectedSlot();
 void SetSelectedSlot(int slot);
 

@@ -13,8 +13,13 @@ void CImageInstruction::Invoke(CFontRenderState& state, CTextRenderBuffer* buf) 
   if (x4_image.IsLoaded() && !x4_image.GetImages().empty()) {
     if (state.GetBlock()->GetTextDirection() == kTD_Horizontal) {
       if (buf) {
-        buf->AddImage(CVector2i(state.GetX(), state.GetY() + state.GetLine()->GetBaseline() -
-                                                  x4_image.CalculateBaseline()),
+        int imageX=state.GetX();
+        int imageY=state.GetY()+state.GetLine()->GetBaseline()-x4_image.CalculateBaseline();
+#ifdef TARGET_PC
+        imageX+=x4_image.PortOffsetX();
+        imageY+=x4_image.PortOffsetY();
+#endif
+        buf->AddImage(CVector2i(imageX,imageY),
                       x4_image);
       }
       state.SetX(state.GetX() + x4_image.GetWidth());

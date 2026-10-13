@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <limits.h>
+#include <math.h>
 
 static inline int32_t musyxPcClamp32(int64_t value) {
   return value > INT32_MAX ? INT32_MAX : value < INT32_MIN ? INT32_MIN : (int32_t)value;

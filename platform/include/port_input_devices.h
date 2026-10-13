@@ -43,6 +43,8 @@ SPoll Poll(unsigned mouseHeld, bool focused);
 // Runs the port's own actions (port menu, save/load state, screenshot, Original
 // experience) from their bindings; called once a frame from the overlay update.
 void PollPortActions();
+bool WalkHeld();
+int KeyBindingForPad(bool axis, unsigned code);
 
 // The user's bindings from <user>/controls.toml (port_input_bindings.h), loaded on
 // first use and reloaded when the file changes (checked at most once a second). A

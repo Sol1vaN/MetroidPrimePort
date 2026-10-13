@@ -7,6 +7,7 @@
 #include <rstl/StringExtras.hpp>
 #include <rstl/algorithm.hpp>
 #include <stdlib.h>
+#include "port_map_legend.h"
 
 // Unused asset-ID format retained in the original string pool.
 static const char* const skAssetIdFormat = "%02x%02x%02x%02x";
@@ -72,6 +73,8 @@ TToken< CRasterFont > CTextParser::GetFont(const wchar_t* str, int len) {
 
 CFontImageDef CTextParser::GetImage(const wchar_t* str, int len,
                                     const rstl::vector< rstl::pair< CAssetId, CAssetId > >* vec) {
+  if (len>=5 && str[0]==L'P' && str[1]==L'O' && str[2]==L'R' && str[3]==L'T' && str[4]==L',')
+    return PortMapLegend::Image(str+5,len-5);
   const rstl::string text = CStringExtras::ConvertToANSI(rstl::wstring(str, len));
   int commaCount = 0;
   int pos = 0;

@@ -326,3 +326,19 @@ Sunchamber dish bug) and AI that behaves differently at other rates. Each needs
 fixing and testing room by room, and any miss changes gameplay. Interpolation
 never changes the simulation, so its failures are visual only. `sim_rate` and
 `sim_adaptive` stay in F1 Performance as experiments.
+
+## Morph-ball center correction (ball-map25)
+
+The ball render origin is the player position plus a world-space radius offset.
+Interpolating the player's rigid transform therefore rotates this offset about
+its feet and introduces a false orbit between fixed ticks. The morph ball now
+snapshots its actual render transform, including tire tilt, and interpolates
+around that center. Its rolling orientation uses shortest-path slerp without the
+ordinary actor's 45-degree cut threshold; teleports over four units, stale tick
+snapshots, disabled interpolation and morph transitions still snap to the native
+pose. The existing actor render scope applies the resulting view correction.
+Simulation, collision, camera targets and adaptive timing are unchanged.
+
+`port_ball_presentation_tests` checks analytic rolling at 60/120/144/240 FPS,
+including rotations above 45 degrees per tick and lifecycle discontinuities.
+These numerical checks do not replace visual validation in a running game.

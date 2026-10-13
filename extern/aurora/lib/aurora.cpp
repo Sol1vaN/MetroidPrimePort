@@ -498,6 +498,7 @@ void end_frame() noexcept {
 
     const bool canPresent = currentTexture && currentView;
     if (canPresent) {
+      webgpu::update_display_brightness();
       wgpu::BindGroup presentBindGroup;
       if (rmlBindGroup && !rmlOverlay) {
         presentBindGroup = rmlBindGroup;
@@ -706,6 +707,13 @@ void aurora_set_pause_on_focus_lost(bool value) { aurora::g_config.pauseOnFocusL
 void aurora_set_background_input(bool value) {
   aurora::g_config.allowJoystickBackgroundEvents = value;
   aurora::window::set_background_input(value);
+}
+void aurora_set_display_brightness(float gain) {
+#ifdef AURORA_ENABLE_GX
+  aurora::webgpu::set_display_brightness(gain);
+#else
+  (void)gain;
+#endif
 }
 void aurora_set_resampler(AuroraSampler sampler) {
 #ifdef AURORA_ENABLE_GX

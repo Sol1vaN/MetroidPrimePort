@@ -14,6 +14,9 @@
 #include "rstl/math.hpp"
 
 #include "port_debug.h"
+#ifdef TARGET_PC
+#include "port_viewmodel_settings.h"
+#endif
 
 int CHUDBillboardEffect::g_BillboardCount = 0;
 int CHUDBillboardEffect::g_IndirectTexturedBillboardCount = 0;
@@ -81,7 +84,16 @@ void CHUDBillboardEffect::PreRender(CStateManager& mgr, const CFrustumPlanes& fr
   if (mgr.GetPlayer()->GetCameraState() == CPlayer::kCS_FirstPerson &&
       !PortDebug::HideVisorEffects()) {
     CTransform4f camXf = mgr.GetCameraManager()->GetCurrentCameraTransform(mgr);
-    xe8_generator->SetGlobalTranslation(camXf * xec_translation);
+    CVector3f translation = xec_translation;
+#ifdef TARGET_PC
+    const CGameCamera& cam = mgr.GetCameraManager()->GetCurrentCamera(mgr);
+    const auto fit = PortViewmodelSettings::VisorScale(cam.GetAspectRatio(), cam.GetRenderFov());
+    const CVector3f scale(fit.x, fit.y, fit.z);
+    // Reapply from the authored scale each frame; never compound on resize.
+    xe8_generator->SetLocalScale(CVector3f::ByElementMultiply(xf8_localScale, scale));
+    translation = CVector3f::ByElementMultiply(translation, scale);
+#endif
+    xe8_generator->SetGlobalTranslation(camXf * translation);
     xe8_generator->SetGlobalOrientation(camXf);
 #ifdef TARGET_PC
     // camXf is the presented camera: blending it again would trail a frame behind.

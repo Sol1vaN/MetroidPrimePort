@@ -16,8 +16,10 @@
 #include "musyx/musyx.h"
 #include "musyx/sal.h"
 #include "musyx/synth.h"
+#include "musyx/macros.h"
 #include "musyx/port_voices.h"
 #include "musyx/pc_audio_math.h"
+#include "musyx/pc_step_tempo.h"
 
 // Audio parameters
 #define SAL_SAMPLES_PER_FRAME 160
@@ -150,6 +152,27 @@ typedef struct VoiceResamplerState {
 } VoiceResamplerState;
 
 static VoiceResamplerState voiceResampler[SYNTH_MAX_VOICES];
+// Only the map mouse voice is gated; generation ids protect recycled voices.
+static u32 stepVoiceId[SYNTH_MAX_VOICES];
+static u8 stepEnabled[SYNTH_MAX_VOICES];
+static MusyxStepDetents stepDetents[SYNTH_MAX_VOICES];
+void MusyxPortBeginVoiceUpdate(void) { if(globalMutex)hwDisableIrq(); }
+void MusyxPortEndVoiceUpdate(void) { if(globalMutex)hwEnableIrq(); }
+void MusyxPortSetVoiceStepTravel(uint32_t voice,float teeth,float dt) {
+  if(!globalMutex || !isfinite(teeth))return;
+  hwDisableIrq();
+  u32 id=vidGetInternalId(voice);
+  for(unsigned count=0;id!=SND_ID_ERROR && count<SYNTH_MAX_VOICES;++count) {
+    unsigned index=id&0xff;
+    if(index>=SYNTH_MAX_VOICES || synthVoice[index].id!=id)break;
+    if(!stepEnabled[index] || stepVoiceId[index]!=id)
+      memset(&stepDetents[index],0,sizeof(stepDetents[index]));
+    stepVoiceId[index]=id;stepEnabled[index]=teeth>=0;
+    if(teeth>=0)musyxStepPush(&stepDetents[index],teeth,dt);
+    id=synthVoice[index].child;
+  }
+  hwEnableIrq();
+}
 static u32 voiceEffPitch[SYNTH_MAX_VOICES];
 static s32 voiceRms[SYNTH_MAX_VOICES];
 static s16 polyphaseTable[POLYPHASE_PHASES][POLYPHASE_TAPS];
@@ -560,10 +583,13 @@ static int renderVoiceSegment(DSPvoice* vp, s32* mainL, s32* mainR, s32* mainS, 
   if (pitch == 0)
     return 0;
 
+
   /* Decode samples into temp buffer */
   VoiceResamplerState* state = &voiceResampler[voiceIdx];
   fillSourceBuffer(vp, voiceIdx, frameSamples, pitch);
   int nSamples = resampleVoice(voiceIdx, voiceDecodeBuf, frameSamples, pitch);
+  if(stepEnabled[voiceIdx] && stepVoiceId[voiceIdx]==synthVoice[voiceIdx].id)
+    musyxStepApply(&stepDetents[voiceIdx],synthInfo.mixFrq,voiceDecodeBuf,nSamples);
   voiceEffPitch[voiceIdx] = pitch;
   {
     long long sum = 0;
@@ -1029,6 +1055,7 @@ bool salInitAi(SND_SOME_CALLBACK callback, u32 flags, u32* outFreq) {
   memset(adpcmPS, 0, sizeof(adpcmPS));
   memset(adpcmRestart, 0, sizeof(adpcmRestart));
   memset(voiceResampler, 0, sizeof(voiceResampler));
+  memset(stepEnabled, 0, sizeof(stepEnabled));
   initResampleTables();
 
   salAudioSubsystemInitialized = SDL_InitSubSystem(SDL_INIT_AUDIO);

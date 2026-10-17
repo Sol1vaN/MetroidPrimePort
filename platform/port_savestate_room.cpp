@@ -1,5 +1,6 @@
 #include "port_savestate.h"
 #include "port_log.h"
+#include "port_platform_restore.h"
 
 #include "Kyoto/Math/CTransform4f.hpp"
 #include "MetroidPrime/CGameArea.hpp"
@@ -35,6 +36,18 @@ enum RoomTag : uint32_t {
 
 // Friend of the script classes whose state is private.
 struct PortRoomState {
+  static void RestorePlatformPose(CStateManager& mgr, CScriptPlatform& p, const CTransform4f& xf) {
+    const CVector3f delta = xf.GetTranslation() - p.GetTranslation();
+    p.SetTransform(xf);
+    // Live platform motion translates both static and dynamic slaves through
+    // this same path. Effects are CActors, not saved CPhysicsActors.
+    CScriptPlatform::TMovedList moved;
+    moved.push_back(p.GetUniqueId().Value());
+    p.DragSlaves(mgr, moved, delta);
+    p.x270_dragDelta = CVector3f::Zero();
+    p.x27c_rotDelta = CQuaternion::NoRotation();
+    p.x318_riders.clear();
+  }
   static void PutTimer(const CScriptTimer& t, PortSaveState::BlockWriter& w) {
     w.F32(t.x34_time);
     w.U8(t.x42_isTiming ? 1 : 0);
@@ -387,6 +400,28 @@ int ApplyRoomState(CStateManager& mgr, const RoomState& room, std::vector< int32
     mgr.DeleteObjectRequest(uid);
     ++stats.removed;
   }
+  // Restore platform hierarchies before ordinary object payloads. A saved
+  // child platform gets its own absolute pose after its parent carries it;
+  // saved slave physics actors likewise override the inherited translation.
+  struct PlatformPose { CScriptPlatform* platform; CTransform4f transform; };
+  std::vector<PlatformPose> platforms;
+  for (const RoomObject& obj : room.objects) {
+    if (now.count(TEditorId(obj.editorId).AreaNum()) == 0) continue;
+    CEntity* ent = mgr.ObjectById(mgr.GetIdForScript(TEditorId(obj.editorId)));
+    CScriptPlatform* platform = ent ? TCastToPtr<CScriptPlatform>(ent) : nullptr;
+    const RoomBlock* b = FindBlock(obj, kTagTransform);
+    if (platform == nullptr || platform->IsInGraveyard() || b == nullptr) continue;
+    BlockReader reader(b->data);
+    CTransform4f transform = CTransform4f::Identity();
+    if (GetTransform(reader, transform)) platforms.push_back({platform, transform});
+  }
+  const bool restored = PortPlatformRestore::ParentsFirst(platforms.size(),
+      [&](size_t parent, size_t child) {
+        return platforms[parent].platform->IsSlave(platforms[child].platform->GetUniqueId());
+      }, [&](size_t i) {
+        PortRoomState::RestorePlatformPose(mgr, *platforms[i].platform, platforms[i].transform);
+      });
+  if (!restored) PortLog::Write("[savestate] cyclic platform slaves: dependent-pose restore skipped\n");
   for (const RoomObject& obj : room.objects) {
     if (now.count(TEditorId(obj.editorId).AreaNum()) == 0)
       continue;

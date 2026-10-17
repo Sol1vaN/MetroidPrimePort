@@ -570,6 +570,10 @@ if(MP_BUILD_TESTS)
     target_include_directories(port_platform_movement_tests PRIVATE platform/include)
     add_test(NAME port_platform_movement_tests COMMAND port_platform_movement_tests)
     set_tests_properties(port_platform_movement_tests PROPERTIES TIMEOUT 15 LABELS port)
+    add_executable(port_platform_restore_tests tests/port_platform_restore.cpp)
+    target_include_directories(port_platform_restore_tests PRIVATE platform/include)
+    add_test(NAME port_platform_restore_tests COMMAND port_platform_restore_tests)
+    set_tests_properties(port_platform_restore_tests PROPERTIES TIMEOUT 15 LABELS port)
 
     set_tests_properties(port_version PROPERTIES TIMEOUT 15 LABELS port
         PASS_REGULAR_EXPRESSION "Metroid Prime native port")

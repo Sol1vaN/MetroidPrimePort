@@ -10,6 +10,10 @@
 #include "MetroidPrime/Player/CMorphBall.hpp"
 #include "MetroidPrime/Player/CPlayerGun.hpp"
 #include "MetroidPrime/CStateManager.hpp"
+#include "MetroidPrime/CGameCollision.hpp"
+#include "MetroidPrime/ScriptObjects/CScriptPlatform.hpp"
+#include "Collision/CCollisionPrimitive.hpp"
+#include "Collision/CRayCastResult.hpp"
 #include "MetroidPrime/CControlMapper.hpp"
 #include "MetroidPrime/CRumbleManager.hpp"
 #include "MetroidPrime/CFluidPlaneCPU.hpp"
@@ -65,7 +69,8 @@ static bool sOrbitAirCarry = false;
 static const float kRemasteredJumpTime = 0.25f;
 static const float kRemasteredDoubleJumpTime = 0.117f;
 static bool RemasteredJump(const CPlayer& player, const CStateManager& mgr) {
-  return player.MouseControlsAllowed(mgr) && PortDebug::RemasteredMovement();
+  return player.MouseControlsAllowed(mgr) && PortDebug::RemasteredMovement() &&
+         !player.PortUsesRetailPlatformMovement();
 }
 // Direct aim without Remastered movement moves along the stick as retail moves
 // forward: ComputeMovement pushes along the stick and GetDampedClampedVelocityWR
@@ -394,7 +399,48 @@ void CPlayer::ComputeDash(const CFinalInput& input, float dt, CStateManager& mgr
   }
 }
 
+#ifdef TARGET_PC
+void CPlayer::PortUpdatePlatformMovement(CStateManager& mgr) {
+  const bool enabled = GetMorphballTransitionState() == kMS_Unmorphed &&
+                       MouseControlsAllowed(mgr) && PortDebug::RemasteredMovement();
+  const bool grounded = GetPlayerMovementState() == NPlayer::kMS_OnGround;
+  const bool jumping = GetPlayerMovementState() == NPlayer::kMS_Jump;
+  bool support = false;
+  if (enabled && (grounded || (!jumping && GetVelocityWR().GetZ() <= 0.f))) {
+    // A short, downward floor probe selects the compatibility mover; it does
+    // not move/snap the player. It also recovers a legacy quickload that is
+    // already alternating Falling/OnFloor above a moving platform.
+    const float reach = GetStepDownHeight() + .25f;
+    const CAABox bounds = GetCollisionPrimitive()->CalculateAABox(GetPrimitiveTransform());
+    const CAABox query(bounds.GetMinPoint() - CVector3f(.05f,.05f,reach),
+                       bounds.GetMaxPoint() + CVector3f(.05f,.05f,.25f));
+    TEntityList near, platforms;
+    mgr.BuildColliderList(near, *this, query);
+    for (const TUniqueId* id = near.begin(); id != near.end(); ++id) {
+      const CScriptPlatform* platform = TCastToConstPtr< CScriptPlatform >(mgr.GetObjectById(*id));
+      if (platform == nullptr || !platform->GetActive()) continue;
+      platforms.push_back(*id);
+      if (platform->IsRider(GetUniqueId())) support = true;
+    }
+    if (!support && !platforms.empty()) {
+      TUniqueId hit = kInvalidUniqueId;
+      const CVector3f from(GetTranslation().GetX(), GetTranslation().GetY(),
+                           bounds.GetMinPoint().GetZ() + .1f);
+      const CRayCastResult ray = CGameCollision::RayDynamicIntersection(mgr, hit, from,
+          CVector3f(0.f,0.f,-1.f), reach + .1f,
+          CMaterialFilter::MakeInclude(CMaterialList(kMT_Solid)), platforms);
+      support = ray.IsValid() && ray.GetPlane().GetNormal().GetZ() > .70710677f;
+    }
+  }
+  mPortPlatformMovement.Update(enabled, grounded, jumping,
+                               GetVelocityWR().GetZ() <= 0.f, support);
+}
+#endif
+
 void CPlayer::ComputeMovement(const CFinalInput& input, CStateManager& mgr, float dt) {
+#ifdef TARGET_PC
+  PortUpdatePlatformMovement(mgr);
+#endif
   const float jumpInput = JumpInput(input, mgr);
   const bool mouseMovement = MouseControlsAllowed(mgr) && x304_orbitState == kOS_NoOrbit;
 #ifdef TARGET_PC

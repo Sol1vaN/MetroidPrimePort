@@ -837,7 +837,9 @@ void CGameCollision::MovePlayer(CStateManager& mgr, CPhysicsActor& actor, float 
   CPlayer* const player = TCastToPtr< CPlayer >(&actor);
   const PortRemasteredGround::MoverGate moverGate{
       player != nullptr && player->GetMorphballTransitionState() == CPlayer::kMS_Unmorphed,
-      player != nullptr && player->MouseControlsAllowed(mgr), PortDebug::RemasteredMovement()};
+      player != nullptr && player->MouseControlsAllowed(mgr),
+      PortDebug::RemasteredMovement() && player != nullptr &&
+          !player->PortUsesRetailPlatformMovement()};
   const bool remasteredMoverTick = PortRemasteredGround::UsesRemasteredMover(moverGate);
   if (player != nullptr) {
     player->PortSetRetainedObjectState(PortRemasteredGround::RetainedEntryForTick(

@@ -691,7 +691,8 @@ CMaterialList CGroundMovement::MoveObjectAnalytical(CStateManager& mgr, CPhysics
   // u/s as in Remastered, not 10.723.
   const CPlayer* player = TCastToConstPtr< CPlayer >(&actor);
   const float freeDelta =
-      player && player->MouseControlsAllowed(mgr) && PortDebug::RemasteredMovement()
+      player && player->MouseControlsAllowed(mgr) && PortDebug::RemasteredMovement() &&
+              !player->PortUsesRetailPlatformMovement()
           ? 0.f
           : options.x20_minimumTranslationDelta * (PortDebug::TickPeriod() * 60.f);
 #else

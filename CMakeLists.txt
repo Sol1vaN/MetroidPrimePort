@@ -566,6 +566,11 @@ endif()
 if(MP_BUILD_TESTS)
     enable_testing()
     add_test(NAME port_version COMMAND metroid_prime_port --version)
+    add_executable(port_platform_movement_tests tests/port_platform_movement.cpp)
+    target_include_directories(port_platform_movement_tests PRIVATE platform/include)
+    add_test(NAME port_platform_movement_tests COMMAND port_platform_movement_tests)
+    set_tests_properties(port_platform_movement_tests PROPERTIES TIMEOUT 15 LABELS port)
+
     set_tests_properties(port_version PROPERTIES TIMEOUT 15 LABELS port
         PASS_REGULAR_EXPRESSION "Metroid Prime native port")
     add_executable(port_buffer_tests

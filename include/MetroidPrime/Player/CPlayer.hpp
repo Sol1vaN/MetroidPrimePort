@@ -21,6 +21,7 @@
 // The port's retained Remastered physics object state (platform seam): see
 // RetainedResult in port_remastered_ground_policy.h for the source contract.
 #include "port_remastered_ground_policy.h"
+#include "port_platform_movement.h"
 #endif
 
 class CPlayerGun;
@@ -308,6 +309,8 @@ public:
   // serialized: the source never restores it either (CPhysicsState's ctor writes 0 and no
   // load path touches it, MOVER-SELECTION.md §3), so a rebuilt player starts at the default
   // 0/valid below and nothing stale survives a save-state load.
+  bool PortUsesRetailPlatformMovement() const { return mPortPlatformMovement.retail; }
+  void PortUpdatePlatformMovement(CStateManager& mgr);
   const PortRemasteredGround::RetainedResult& PortRetainedObjectState() const {
     return xa34_retainedObjectState;
   }
@@ -775,6 +778,7 @@ private:
   int xa2c_damageLoopSfxDelayTicks;
   float xa30_samusExhaustedVoiceTimer;
 #ifdef TARGET_PC
+  PortPlatformMovement::Mode mPortPlatformMovement;
   // Port: the retained Remastered physics object state (see PortRetainedObjectState above).
   // Default-initialised (0 / valid) by every constructor, as the source ctor does.
   PortRemasteredGround::RetainedResult xa34_retainedObjectState;
